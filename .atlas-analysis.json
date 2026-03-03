@@ -1,0 +1,122 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "Vectra Guard",
+  "projectDescription": "Security guard for AI coding agents and development workflows that validates, sandboxes, and audits shell commands",
+  "theme": "aspen",
+  "primaryColor": "#2563eb",
+  "lightColor": "#3b82f6",
+  "darkColor": "#1e40af",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/command-protection",
+              "features/sandbox",
+              "features/sessions-and-audit",
+              "features/cve-scanning"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "security/secret-scanning",
+              "security/code-scanning",
+              "security/threat-model"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/overview",
+              "configuration/presets",
+              "configuration/sandbox-config",
+              "configuration/guard-levels"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/trust-store",
+              "advanced/context-summaries",
+              "advanced/roadmap-planning",
+              "advanced/metrics"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/ide-integration",
+              "integrations/ai-agents",
+              "integrations/ci-cd",
+              "integrations/git-hooks"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "CLI Reference",
+        "groups": [
+          {
+            "group": "Commands",
+            "pages": [
+              "cli/exec",
+              "cli/validate",
+              "cli/session",
+              "cli/audit",
+              "cli/cve",
+              "cli/scan-secrets",
+              "cli/scan-security",
+              "cli/trust",
+              "cli/context",
+              "cli/roadmap",
+              "cli/metrics",
+              "cli/init"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Command validation and risk analysis",
+    "Intelligent sandbox execution with caching",
+    "CVE scanning for vulnerable dependencies",
+    "Session tracking and audit trails",
+    "Secret and security code scanning",
+    "Trust store for approved commands",
+    "AI agent integration (Cursor, VSCode, OpenClaw)",
+    "Multiple enforcement modes"
+  ],
+  "publicApiSurface": [
+    "exec - Protected command execution",
+    "validate - Script validation without execution",
+    "session - Session management (start, show, list, end)",
+    "audit - Audit reports (session, repo, npm, python)",
+    "cve - CVE scanning (sync, scan, explain)",
+    "scan-secrets - Secret detection in code",
+    "scan-security - Security code pattern detection",
+    "trust - Trust store management (add, list, remove, clean)",
+    "context - Context summaries for AI agents",
+    "roadmap - Roadmap planning for projects",
+    "metrics - Sandbox usage metrics",
+    "init - Initialize configuration",
+    "explain - Explain security risks",
+    "lockdown - Strict enforcement mode",
+    "prompt-firewall - Prompt injection detection",
+    "validate-agent - Agent-specific validation",
+    "seed - Seed agent instructions",
+    "serve - Web UI server"
+  ]
+}
