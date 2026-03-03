@@ -1,0 +1,162 @@
+---
+title: "vg session"
+description: "Track and manage execution sessions for agents and workflows"
+---
+
+## Syntax
+
+```bash
+vectra-guard session <subcommand> [options]
+vg session <subcommand> [options]
+```
+
+## Subcommands
+
+### session start
+
+Start a new tracked session.
+
+```bash
+vg session start --agent <name> [--workspace <path>]
+```
+
+<ParamField path="--agent" type="string" default="unknown">
+  Name of the agent or user starting the session (e.g., "cursor-ai", "manual", "github-actions")
+</ParamField>
+
+<ParamField path="--workspace" type="string">
+  Workspace directory path. Defaults to current working directory.
+</ParamField>
+
+**Returns**: Session ID (can be captured and exported)
+
+### session end
+
+End an active session.
+
+```bash
+vg session end <session-id>
+```
+
+**Arguments**:
+- `session-id`: ID of the session to end
+
+### session list
+
+List all sessions for the current workspace.
+
+```bash
+vg session list
+```
+
+**Output**: Table with session ID, agent, start time, duration, commands, violations, and risk score.
+
+### session show
+
+Show detailed information about a specific session.
+
+```bash
+vg session show <session-id>
+```
+
+**Arguments**:
+- `session-id`: ID of the session to display
+
+**Output**: Full session details including all commands, file operations, timestamps, exit codes, and findings.
+
+### session record
+
+Manually record a command in a session (used by shell trackers).
+
+```bash
+vg session record --command <cmd> --exit-code <code> [--session <id>]
+```
+
+<ParamField path="--command" type="string" required>
+  Command string to record in the session
+</ParamField>
+
+<ParamField path="--exit-code" type="integer" default="0">
+  Exit code of the executed command
+</ParamField>
+
+<ParamField path="--session" type="string">
+  Session ID. If not provided, uses the current workspace session.
+</ParamField>
+
+## Examples
+
+### Start a session and export ID
+
+```bash
+SESSION=$(vg session start --agent "cursor-ai")
+export VECTRAGUARD_SESSION_ID=$SESSION
+echo "Session started: $SESSION"
+```
+
+### Execute commands in a session
+
+```bash
+vg exec -- npm install
+vg exec -- npm test
+vg exec -- git commit -m "feat: add feature"
+# All automatically tracked in $SESSION
+```
+
+### View session summary
+
+```bash
+vg session show $SESSION
+# Output:
+# Session: session-abc123
+# Agent: cursor-ai
+# Workspace: /home/user/project
+# Start Time: 2026-03-03T10:00:00Z
+# Status: Active
+# Risk Score: 12
+# Violations: 0
+#
+# Commands (3):
+#   1. [10:00:05] npm install (exit: 0, risk: low)
+#   2. [10:01:15] npm test (exit: 0, risk: low)
+#   3. [10:02:30] git commit -m "feat: add feature" (exit: 0, risk: low)
+```
+
+### List all sessions
+
+```bash
+vg session list
+# SESSION ID       AGENT       START TIME           DURATION  COMMANDS  VIOLATIONS  RISK
+# session-abc123   cursor-ai   2026-03-03 10:00:00  5m 30s    3         0           12
+# session-def456   manual      2026-03-03 09:00:00  1h 15m    8         1           24
+```
+
+### End a session
+
+```bash
+vg session end $SESSION
+# Session ended: session-abc123
+# Commands: 3, Violations: 0, Risk Score: 12
+```
+
+### JSON output for automation
+
+```bash
+vg --output json session show $SESSION | jq '.commands[] | select(.exit_code != 0)'
+# Find all failed commands in a session
+```
+
+## Session Storage
+
+Sessions are stored in `.vectra-guard/sessions/` within the workspace directory. Each session is a JSON file containing:
+
+- Session metadata (ID, agent, workspace, timestamps)
+- All executed commands with timestamps, exit codes, risk levels
+- File operations performed
+- Security findings and violations
+- Risk scores and metadata
+
+## Related Commands
+
+- [exec](/cli/exec) - Execute commands (auto-tracks in sessions)
+- [audit](/cli/audit) - Audit session activity

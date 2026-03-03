@@ -1,0 +1,412 @@
+---
+title: Roadmap Planning
+description: Plan and track development tasks for agents and humans
+---
+
+The roadmap feature helps agents and humans plan, track, and document development work. Perfect for organizing tasks, linking them to sessions, and maintaining a clear record of what was done and why.
+
+## How It Works
+
+Roadmap items are:
+- **Stored in your workspace** at `.vectra-guard/roadmap.json`
+- **Tracked with unique IDs** like `rm-1234567890`
+- **Linked to sessions** for traceability
+- **Status-based** for easy filtering (planned, in-progress, completed, blocked)
+
+<Info>
+Roadmap items are workspace-specific. Each project has its own roadmap.
+</Info>
+
+## Core Commands
+
+### Add Roadmap Item
+
+Create a new roadmap item:
+
+```bash
+vg roadmap add --title "Improve cache heuristics" --summary "Tune cache hit scoring" --tags "agent,performance"
+```
+
+**Output:**
+```
+[INFO] roadmap item added item_id=rm-1234567890 title="Improve cache heuristics"
+```
+
+**Flags:**
+- `--title` (required) - Short title for the item
+- `--summary` (optional) - Detailed description
+- `--status` (optional) - Initial status (default: `planned`)
+- `--tags` (optional) - Comma-separated tags
+
+<Tip>
+Use descriptive titles and tags for easy filtering later.
+</Tip>
+
+### List Roadmap Items
+
+View all roadmap items:
+
+```bash
+vg roadmap list
+```
+
+**Example output:**
+```
+[INFO] roadmap item id=rm-1234567890 title="Improve cache heuristics" status=planned summary="Tune cache hit scoring" tags=agent,performance updated=2024-12-24
+[INFO] roadmap item id=rm-1234567891 title="Add pytest support" status=in-progress summary="Support Python testing" tags=testing,python updated=2024-12-23
+[INFO] roadmap item id=rm-1234567892 title="Fix sandbox timeout" status=completed summary="Increase timeout to 30s" tags=bug,sandbox updated=2024-12-22
+```
+
+### Filter by Status
+
+```bash
+vg roadmap list --status in-progress
+```
+
+Shows only items with `in-progress` status.
+
+**Valid statuses:**
+- `planned` (default)
+- `in-progress`
+- `completed`
+- `blocked`
+- `cancelled`
+
+### Show Roadmap Item
+
+View detailed information about an item including all logs:
+
+```bash
+vg roadmap show rm-1234567890
+```
+
+**Example output:**
+```
+[INFO] roadmap item id=rm-1234567890 title="Improve cache heuristics" status=planned summary="Tune cache hit scoring" tags=agent,performance created=2024-12-24 10:00:00 updated=2024-12-24 15:30:00
+[INFO] roadmap log item_id=rm-1234567890 time="2024-12-24 10:00:00" note="Created item" session= source=manual
+[INFO] roadmap log item_id=rm-1234567890 time="2024-12-24 15:30:00" note="Investigated cache hit rate" session=session-1234567890 source=agent
+```
+
+### Update Status
+
+Change the status of a roadmap item:
+
+```bash
+vg roadmap status rm-1234567890 in-progress
+```
+
+**Output:**
+```
+[INFO] roadmap status updated item_id=rm-1234567890 status=in-progress
+```
+
+### Add Log Entry
+
+Attach notes and link sessions to roadmap items:
+
+```bash
+vg roadmap log rm-1234567890 --note "Investigated cache hit rate" --session $VECTRAGUARD_SESSION_ID
+```
+
+**Output:**
+```
+[INFO] roadmap log added item_id=rm-1234567890
+```
+
+**Flags:**
+- `--note` (required) - Note text
+- `--session` (optional) - Session ID to link
+- `--source` (optional) - Source identifier (default: `manual`)
+
+<Info>
+Linking sessions creates a full audit trail from planning to execution.
+</Info>
+
+## Use Cases
+
+### Agent Planning Workflow
+
+<Steps>
+  <Step title="Agent identifies task">
+    ```bash
+    # Agent analyzes codebase and identifies improvement
+    vg roadmap add --title "Add rate limiting" --summary "Prevent API abuse" --tags "agent,security"
+    ```
+  </Step>
+  
+  <Step title="Agent starts work">
+    ```bash
+    # Update status and start session
+    vg roadmap status rm-1234567890 in-progress
+    SESSION=$(vg session start --agent "cursor-ai")
+    export VECTRAGUARD_SESSION_ID=$SESSION
+    ```
+  </Step>
+  
+  <Step title="Agent executes commands">
+    ```bash
+    # All commands tracked in session
+    vg exec "npm install express-rate-limit"
+    vg exec "npm test"
+    ```
+  </Step>
+  
+  <Step title="Agent logs progress">
+    ```bash
+    # Link session to roadmap item
+    vg roadmap log rm-1234567890 --note "Implemented rate limiting" --session $SESSION
+    ```
+  </Step>
+  
+  <Step title="Agent completes task">
+    ```bash
+    # Update status
+    vg roadmap status rm-1234567890 completed
+    vg session end $SESSION
+    ```
+  </Step>
+</Steps>
+
+### Human + Agent Collaboration
+
+```bash
+# Human plans work
+vg roadmap add --title "Refactor auth module" --summary "Split into smaller functions" --tags "refactor,auth"
+
+# Human assigns to agent
+vg roadmap log rm-1234567890 --note "Assigned to AI agent for implementation" --source "human"
+
+# Agent picks up task
+vg roadmap status rm-1234567890 in-progress
+vg roadmap log rm-1234567890 --note "Starting refactor" --source "agent"
+
+# Agent completes
+vg roadmap status rm-1234567890 completed
+vg roadmap log rm-1234567890 --note "Refactored into 5 smaller functions, added tests" --source "agent"
+```
+
+### Task Tracking
+
+```bash
+# Create tasks
+vg roadmap add --title "Add CVE scanning" --status planned
+vg roadmap add --title "Add secret detection" --status planned
+vg roadmap add --title "Add container support" --status planned
+
+# Start first task
+vg roadmap status rm-1234567890 in-progress
+
+# Complete task
+vg roadmap status rm-1234567890 completed
+
+# Check progress
+vg roadmap list --status completed
+vg roadmap list --status in-progress
+vg roadmap list --status planned
+```
+
+### Long-Running Projects
+
+```bash
+# Create epic
+vg roadmap add --title "Rewrite sandbox engine" --summary "Migration to eBPF" --tags "epic,sandbox"
+
+# Add progress logs over time
+vg roadmap log rm-1234567890 --note "Research phase complete"
+vg roadmap log rm-1234567890 --note "PoC working for basic commands"
+vg roadmap log rm-1234567890 --note "50% test coverage achieved"
+vg roadmap log rm-1234567890 --note "Performance benchmark: 2x faster"
+
+# View full history
+vg roadmap show rm-1234567890
+```
+
+## Linking to Sessions
+
+Roadmap items can be linked to execution sessions for full traceability:
+
+```bash
+# Start session
+SESSION=$(vg session start --agent "cursor-ai")
+export VECTRAGUARD_SESSION_ID=$SESSION
+
+# Do work
+vg exec "npm install"
+vg exec "npm test"
+
+# Link to roadmap
+vg roadmap log rm-1234567890 --note "Completed dependency update" --session $SESSION
+
+# End session
+vg session end $SESSION
+
+# View roadmap item with session link
+vg roadmap show rm-1234567890
+# Output includes: session=session-1234567890
+```
+
+<Note>
+Linked sessions let you trace from planning → execution → results.
+</Note>
+
+## Status Tracking
+
+### Status Lifecycle
+
+```
+planned → in-progress → completed
+   ↓           ↓
+blocked    cancelled
+```
+
+### Status Definitions
+
+| Status | Meaning |
+|--------|--------|
+| `planned` | Task identified but not started |
+| `in-progress` | Currently being worked on |
+| `completed` | Finished successfully |
+| `blocked` | Waiting on dependencies or issues |
+| `cancelled` | No longer needed |
+
+### Status Commands
+
+```bash
+# Start work
+vg roadmap status rm-1234567890 in-progress
+
+# Hit blocker
+vg roadmap status rm-1234567890 blocked
+vg roadmap log rm-1234567890 --note "Blocked on upstream API change"
+
+# Unblock and resume
+vg roadmap status rm-1234567890 in-progress
+vg roadmap log rm-1234567890 --note "Upstream fixed, resuming work"
+
+# Complete
+vg roadmap status rm-1234567890 completed
+```
+
+## Roadmap Storage
+
+Roadmap data is stored in:
+
+```
+<workspace>/.vectra-guard/roadmap.json
+```
+
+**Example structure:**
+```json
+{
+  "items": [
+    {
+      "id": "rm-1234567890",
+      "title": "Improve cache heuristics",
+      "summary": "Tune cache hit scoring",
+      "status": "planned",
+      "tags": ["agent", "performance"],
+      "created_at": "2024-12-24T10:00:00Z",
+      "updated_at": "2024-12-24T15:30:00Z",
+      "logs": [
+        {
+          "timestamp": "2024-12-24T10:00:00Z",
+          "note": "Created item",
+          "session_id": "",
+          "source": "manual"
+        },
+        {
+          "timestamp": "2024-12-24T15:30:00Z",
+          "note": "Investigated cache hit rate",
+          "session_id": "session-1234567890",
+          "source": "agent"
+        }
+      ]
+    }
+  ]
+}
+```
+
+<Tip>
+You can manually edit `roadmap.json` if needed, but use the CLI commands for proper validation.
+</Tip>
+
+## Tags for Organization
+
+Use tags to categorize and filter roadmap items:
+
+```bash
+# Add items with tags
+vg roadmap add --title "Fix bug #123" --tags "bug,critical"
+vg roadmap add --title "Add feature X" --tags "feature,agent"
+vg roadmap add --title "Refactor Y" --tags "refactor,tech-debt"
+
+# Tags are normalized (lowercase, trimmed)
+# "Bug,CRITICAL" becomes ["bug", "critical"]
+```
+
+**Common tag patterns:**
+- `agent` - Agent-driven tasks
+- `human` - Human-driven tasks
+- `bug` - Bug fixes
+- `feature` - New features
+- `refactor` - Code refactoring
+- `performance` - Performance improvements
+- `security` - Security enhancements
+
+## Examples
+
+### Quick Task
+
+```bash
+# Add and complete in one session
+vg roadmap add --title "Update dependencies" --tags "maintenance"
+vg roadmap status rm-1234567890 in-progress
+vg exec "npm update"
+vg roadmap status rm-1234567890 completed
+```
+
+### Multi-Step Task
+
+```bash
+# Create task
+vg roadmap add --title "Add GraphQL API" --summary "Replace REST with GraphQL" --tags "feature,api"
+
+# Step 1
+vg roadmap status rm-1234567890 in-progress
+vg roadmap log rm-1234567890 --note "Installed Apollo Server"
+vg exec "npm install apollo-server"
+
+# Step 2
+vg roadmap log rm-1234567890 --note "Defined schema"
+vg exec "vim schema.graphql"
+
+# Step 3
+vg roadmap log rm-1234567890 --note "Added resolvers"
+vg exec "npm test"
+
+# Complete
+vg roadmap status rm-1234567890 completed
+vg roadmap log rm-1234567890 --note "GraphQL API live in production"
+```
+
+### Agent Planning
+
+```bash
+# Agent analyzes codebase and creates roadmap
+vg roadmap add --title "Reduce bundle size" --summary "Code splitting + lazy loading" --tags "agent,performance"
+vg roadmap add --title "Add E2E tests" --summary "Playwright test suite" --tags "agent,testing"
+vg roadmap add --title "Improve accessibility" --summary "ARIA labels + keyboard nav" --tags "agent,a11y"
+
+# Agent works through items
+vg roadmap list --status planned
+# Pick first item
+vg roadmap status rm-1234567890 in-progress
+# ... do work ...
+vg roadmap status rm-1234567890 completed
+```
+
+## Related Features
+
+- [Sessions](/features/sessions-and-audit) - Track command execution
+- [Context Summaries](/advanced/context-summaries) - Understand codebases
+- [Metrics](/advanced/metrics) - Track execution stats

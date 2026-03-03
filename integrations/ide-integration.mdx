@@ -1,0 +1,419 @@
+---
+title: "IDE Integration"
+description: "Integrate Vectra Guard with VSCode, Cursor, and terminal environments"
+---
+
+# IDE Integration
+
+Vectra Guard integrates seamlessly with your development environment, providing security protection across terminals, VSCode, Cursor, and any IDE.
+
+## Quick Start
+
+The shell tracker automatically protects all environments:
+
+```bash
+./scripts/install-shell-tracker.sh
+```
+
+This single installation enables protection in:
+- ✅ Terminal
+- ✅ VSCode integrated terminal
+- ✅ Cursor IDE
+- ✅ Any IDE terminal
+- ✅ SSH sessions
+
+---
+
+## VSCode / Cursor Integration
+
+### Complete Setup
+
+<Steps>
+  <Step title="Install Vectra Guard">
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+    ```
+  </Step>
+
+  <Step title="Install Shell Tracker">
+    ```bash
+    ./scripts/install-shell-tracker.sh --shells "bash zsh"
+    ```
+    
+    Or install for all detected shells interactively:
+    ```bash
+    ./scripts/install-shell-tracker.sh
+    ```
+  </Step>
+
+  <Step title="Configure IDE Tasks">
+    Run the Cursor protection setup script:
+    ```bash
+    WORKSPACE=$(pwd) ./scripts/setup-cursor-protection.sh
+    ```
+    
+    This creates:
+    - `.vscode/settings.json` - Terminal environment configuration
+    - `.vscode/tasks.json` - Protected build tasks
+    - `.vectra-guard/init.sh` - Session initialization
+  </Step>
+
+  <Step title="Restart Your IDE">
+    Restart VSCode or Cursor to load the new configuration.
+  </Step>
+</Steps>
+
+---
+
+## VSCode Tasks Configuration
+
+The setup script creates a complete `tasks.json` with protected commands:
+
+<Tabs>
+  <Tab title="tasks.json (Complete)">
+    ```json
+    {
+      "version": "2.0.0",
+      "tasks": [
+        {
+          "label": "🛡️ Protected: Install Dependencies",
+          "type": "shell",
+          "command": "vectra-guard",
+          "args": ["exec", "--session", "${env:VECTRAGUARD_SESSION_ID}", "--", "npm", "install"],
+          "group": "build",
+          "presentation": {
+            "echo": true,
+            "reveal": "always",
+            "panel": "shared",
+            "showReuseMessage": false
+          }
+        },
+        {
+          "label": "🛡️ Protected: Run Tests",
+          "type": "shell",
+          "command": "vectra-guard",
+          "args": ["exec", "--session", "${env:VECTRAGUARD_SESSION_ID}", "--", "npm", "test"],
+          "group": "test"
+        },
+        {
+          "label": "🛡️ Protected: Build",
+          "type": "shell",
+          "command": "vectra-guard",
+          "args": ["exec", "--session", "${env:VECTRAGUARD_SESSION_ID}", "--", "npm", "run", "build"],
+          "group": {
+            "kind": "build",
+            "isDefault": true
+          }
+        },
+        {
+          "label": "🛡️ Protected: Deploy (Interactive)",
+          "type": "shell",
+          "command": "vectra-guard",
+          "args": ["exec", "--interactive", "--session", "${env:VECTRAGUARD_SESSION_ID}", "--", "./scripts/deploy.sh"],
+          "group": "none"
+        },
+        {
+          "label": "🛡️ Start Session",
+          "type": "shell",
+          "command": "source .vectra-guard/init.sh",
+          "group": "none"
+        },
+        {
+          "label": "🛡️ View Session",
+          "type": "shell",
+          "command": "vectra-guard session show ${env:VECTRAGUARD_SESSION_ID}",
+          "group": "none"
+        }
+      ]
+    }
+    ```
+  </Tab>
+
+  <Tab title="settings.json">
+    ```json
+    {
+      "terminal.integrated.env.osx": {
+        "VECTRAGUARD_SESSION_ID": "${env:VECTRAGUARD_SESSION_ID}"
+      },
+      "terminal.integrated.env.linux": {
+        "VECTRAGUARD_SESSION_ID": "${env:VECTRAGUARD_SESSION_ID}"
+      },
+      "terminal.integrated.env.windows": {
+        "VECTRAGUARD_SESSION_ID": "${env:VECTRAGUARD_SESSION_ID}"
+      },
+      "terminal.integrated.defaultProfile.osx": "bash",
+      "terminal.integrated.profiles.osx": {
+        "bash": {
+          "path": "/bin/bash",
+          "args": ["-l"],
+          "icon": "terminal-bash"
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Terminal Integration
+
+### Shell Tracker Installation
+
+The shell tracker provides automatic session management and command logging across all shells.
+
+<Tabs>
+  <Tab title="Bash">
+    Bash integration is automatically added to `~/.bashrc`:
+
+    ```bash
+    # Vectra Guard Shell Tracker (Auto-generated)
+    if [ -n "$BASH_VERSION" ] && command -v vectra-guard &> /dev/null; then
+      _vectra_guard_init() {
+        if [ -z "$VECTRAGUARD_SESSION_ID" ]; then
+          SESSION=$(vectra-guard session start --agent "${USER}-bash" --workspace "$PWD" 2>/dev/null | tail -n 1 || echo "")
+          if [ -n "$SESSION" ]; then
+            export VECTRAGUARD_SESSION_ID=$SESSION
+            echo $SESSION > ~/.vectra-guard-session
+          fi
+        fi
+      }
+
+      _vectra_guard_preexec() {
+        local cmd="$BASH_COMMAND"
+        if [[ "$cmd" =~ ^vectra-guard ]] || [[ "$cmd" =~ ^vg[[:space:]] ]]; then
+          return 0
+        fi
+        VECTRA_LAST_CMD="$cmd"
+      }
+
+      _vectra_guard_precmd() {
+        local exit_code=$?
+        if [ -n "$VECTRA_LAST_CMD" ] && [ -n "$VECTRAGUARD_SESSION_ID" ]; then
+          vectra-guard session record --session "$VECTRAGUARD_SESSION_ID" --command "$VECTRA_LAST_CMD" --exit-code "$exit_code" &>/dev/null
+        fi
+        unset VECTRA_LAST_CMD
+      }
+
+      shopt -s extdebug
+      trap '_vectra_guard_preexec' DEBUG
+      PROMPT_COMMAND="_vectra_guard_precmd${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+      _vectra_guard_init
+    fi
+    ```
+  </Tab>
+
+  <Tab title="Zsh">
+    Zsh integration is automatically added to `~/.zshrc`:
+
+    ```bash
+    # Vectra Guard Shell Tracker (Auto-generated)
+    if [ -n "$ZSH_VERSION" ] && command -v vectra-guard &> /dev/null; then
+      _vectra_guard_init() {
+        if [[ -z "$VECTRAGUARD_SESSION_ID" ]]; then
+          SESSION=$(vectra-guard session start --agent "${USER}-zsh" --workspace "$PWD" 2>/dev/null | tail -n 1 || echo "")
+          if [[ -n "$SESSION" ]]; then
+            export VECTRAGUARD_SESSION_ID=$SESSION
+            echo $SESSION > ~/.vectra-guard-session
+          fi
+        fi
+      }
+
+      _vectra_guard_preexec() {
+        local cmd="$1"
+        if [[ "$cmd" =~ ^vectra-guard ]] || [[ "$cmd" =~ ^vg[[:space:]] ]]; then
+          return 0
+        fi
+        VECTRA_LAST_CMD="$cmd"
+      }
+
+      _vectra_guard_precmd() {
+        local exit_code=$?
+        if [[ -n "$VECTRA_LAST_CMD" && -n "$VECTRAGUARD_SESSION_ID" ]]; then
+          vectra-guard session record --session "$VECTRAGUARD_SESSION_ID" --command "$VECTRA_LAST_CMD" --exit-code "$exit_code" &>/dev/null
+        fi
+        unset VECTRA_LAST_CMD
+      }
+
+      autoload -Uz add-zsh-hook
+      add-zsh-hook preexec _vectra_guard_preexec
+      add-zsh-hook precmd _vectra_guard_precmd
+      _vectra_guard_init
+    fi
+    ```
+  </Tab>
+
+  <Tab title="Fish">
+    Fish integration is added to `~/.config/fish/config.fish`:
+
+    ```fish
+    # Vectra Guard Integration (Auto-generated)
+    if command -v vectra-guard > /dev/null
+        # Initialize session
+        function _vectra_guard_init
+            if not set -q VECTRAGUARD_SESSION_ID
+                set -gx VECTRAGUARD_SESSION_ID (vectra-guard session start --agent "$USER-fish" --workspace $HOME 2>/dev/null | tail -n 1)
+                if test -n "$VECTRAGUARD_SESSION_ID"
+                    echo $VECTRAGUARD_SESSION_ID > ~/.vectra-guard-session
+                end
+            end
+        end
+        
+        # Command logging
+        function _vectra_guard_preexec --on-event fish_preexec
+            set -g VECTRA_LAST_CMD $argv
+        end
+        
+        function _vectra_guard_postexec --on-event fish_postexec
+            if set -q VECTRA_LAST_CMD; and set -q VECTRAGUARD_SESSION_ID
+                fish -c "vectra-guard session record --session $VECTRAGUARD_SESSION_ID --command \"$VECTRA_LAST_CMD\" --exit-code $status &> /dev/null"
+            end
+        end
+        
+        # Initialize
+        _vectra_guard_init
+        
+        # Convenience alias
+        alias vg='vectra-guard'
+    end
+    ```
+  </Tab>
+</Tabs>
+
+### Installation Options
+
+<CodeGroup>
+  ```bash Interactive Installation
+  # Prompts to select shells
+  ./scripts/install-shell-tracker.sh
+  ```
+
+  ```bash Specific Shells
+  # Install for bash and zsh only
+  ./scripts/install-shell-tracker.sh --shells "bash zsh"
+  ```
+
+  ```bash Non-Interactive
+  # Use environment variable
+  VG_SHELLS="bash zsh" ./scripts/install-shell-tracker.sh
+  ```
+
+  ```bash All Detected Shells
+  # Auto-detect and install for all available shells
+  ./scripts/install-shell-tracker.sh
+  ```
+</CodeGroup>
+
+---
+
+## Session Management
+
+Once the shell tracker is installed, sessions are managed automatically:
+
+```bash
+# Session starts automatically when you open a new terminal
+echo $VECTRAGUARD_SESSION_ID
+# Output: session-1234567890
+
+# All commands are logged automatically
+npm install
+git commit -m "feat: add feature"
+npm test
+
+# View session activity
+vg session show $VECTRAGUARD_SESSION_ID
+
+# List all sessions
+vg session list
+```
+
+---
+
+## Verification
+
+After installation, verify the integration:
+
+<Steps>
+  <Step title="Restart Terminal">
+    ```bash
+    # Bash
+    source ~/.bashrc
+    
+    # Zsh
+    source ~/.zshrc
+    
+    # Fish (auto-loads on restart)
+    ```
+  </Step>
+
+  <Step title="Check Session ID">
+    ```bash
+    echo $VECTRAGUARD_SESSION_ID
+    # Should output: session-XXXXXXXXXX
+    ```
+  </Step>
+
+  <Step title="Test Command Logging">
+    ```bash
+    echo "hello world"
+    vg session show $VECTRAGUARD_SESSION_ID
+    # Should show the echo command in the log
+    ```
+  </Step>
+
+  <Step title="Test Protected Execution">
+    ```bash
+    vg exec -- npm install
+    # Command runs with protection
+    ```
+  </Step>
+</Steps>
+
+---
+
+## IDE Coverage Table
+
+| Tool/Context | Tracked? | Protected? | Setup Required |
+|--------------|----------|------------|----------------|
+| **Terminal** | ✅ | ✅ (via `vg exec`) | Shell tracker |
+| **VSCode** | ✅ | ✅ (via tasks) | Shell tracker + tasks.json |
+| **Cursor** | ✅ | ✅ (via tasks) | Shell tracker + tasks.json |
+| **Any IDE** | ✅ | ✅ (via `vg exec`) | Shell tracker |
+| **SSH Sessions** | ✅ | ✅ (via `vg exec`) | Shell tracker |
+| **Scripts** | ✅ | ✅ (via `vg exec`) | Shell tracker |
+
+---
+
+## Uninstallation
+
+To remove shell tracker integration:
+
+```bash
+# Restore backups
+mv ~/.bashrc.vectra-backup ~/.bashrc
+mv ~/.zshrc.vectra-backup ~/.zshrc
+mv ~/.config/fish/config.fish.vectra-backup ~/.config/fish/config.fish
+
+# Remove tracker files
+rm -rf ~/.vectra-guard
+rm -f ~/.vectra-guard-session
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Agent Integration" icon="robot" href="/integrations/ai-agents">
+    Configure AI agents to use Vectra Guard
+  </Card>
+  <Card title="CI/CD Integration" icon="circle-check" href="/integrations/ci-cd">
+    Add protection to your CI/CD pipelines
+  </Card>
+  <Card title="Git Hooks" icon="code-branch" href="/integrations/git-hooks">
+    Validate scripts before commit
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Customize Vectra Guard settings
+  </Card>
+</CardGroup>

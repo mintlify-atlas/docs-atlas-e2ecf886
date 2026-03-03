@@ -1,0 +1,583 @@
+---
+title: 'Guard Levels'
+description: 'Auto-detection, protection levels, production indicators, and runtime overrides'
+---
+
+## What are Guard Levels?
+
+Guard levels control **what requires approval** or is automatically blocked. They determine how strict Vectra Guard is when evaluating commands.
+
+<Note>
+Guard levels answer: "Should I ask the user about this command?"
+
+Sandbox mode answers: "Where should this command run?"
+</Note>
+
+## Guard Level Options
+
+<Tabs>
+  <Tab title="auto (Recommended)">
+    **Smart Auto-Detection**
+    
+    ```yaml
+    guard_level:
+      level: auto  # Intelligently adjust based on context
+    ```
+    
+    **Behavior:**
+    - Analyzes git branches, commands, URLs, file paths
+    - Development branch → `low` or `medium`
+    - Production branch → `paranoid`
+    - Deploy commands → `high`
+    - Production URLs/databases → `high`
+    
+    **Best for:**
+    - Teams working across dev/staging/prod
+    - Repos with multiple environments
+    - Maximum convenience + safety
+    
+    <Tip>
+    This is the **recommended** setting. Let Vectra Guard be smart!
+    </Tip>
+  </Tab>
+  
+  <Tab title="low">
+    **Minimal Protection**
+    
+    ```yaml
+    guard_level:
+      level: low  # Only block critical risks
+    ```
+    
+    **Behavior:**
+    - Only `CRITICAL` severity risks blocked
+    - High/Medium/Low risks allowed automatically
+    - Minimal interruptions
+    
+    **Best for:**
+    - Trusted local development
+    - Personal projects
+    - Rapid prototyping
+    
+    **Example:**
+    ```bash
+    vg exec "npm install"      # Allowed
+    vg exec "curl | sh"        # Allowed (warning shown)
+    vg exec "rm -rf /"         # BLOCKED
+    ```
+  </Tab>
+  
+  <Tab title="medium">
+    **Balanced Protection**
+    
+    ```yaml
+    guard_level:
+      level: medium  # Block critical + high risks
+    ```
+    
+    **Behavior:**
+    - `CRITICAL` and `HIGH` risks blocked
+    - Medium/Low risks allowed
+    - Good balance of safety and convenience
+    
+    **Best for:**
+    - Team development
+    - Shared codebases
+    - General purpose protection
+    
+    **Example:**
+    ```bash
+    vg exec "npm install"      # Allowed
+    vg exec "curl | sh"        # BLOCKED (high risk)
+    vg exec "rm -rf /"         # BLOCKED (critical)
+    ```
+  </Tab>
+  
+  <Tab title="high">
+    **Strong Protection**
+    
+    ```yaml
+    guard_level:
+      level: high  # Block critical + high + medium
+    ```
+    
+    **Behavior:**
+    - `CRITICAL`, `HIGH`, and `MEDIUM` risks blocked
+    - Only low-risk operations allowed
+    - Requires approval for most operations
+    
+    **Best for:**
+    - CI/CD pipelines
+    - Staging environments
+    - Careful operations
+    
+    **Example:**
+    ```bash
+    vg exec "ls"               # Allowed (low risk)
+    vg exec "npm install pkg"  # BLOCKED (medium risk)
+    vg exec "git push --force" # BLOCKED (high risk)
+    ```
+  </Tab>
+  
+  <Tab title="paranoid">
+    **Maximum Protection**
+    
+    ```yaml
+    guard_level:
+      level: paranoid  # Everything requires approval
+    ```
+    
+    **Behavior:**
+    - **Every command** requires explicit approval
+    - No automatic execution
+    - Complete audit trail
+    
+    **Best for:**
+    - Production environments
+    - Untrusted code
+    - Compliance requirements
+    - Zero-trust environments
+    
+    **Example:**
+    ```bash
+    vg exec "ls"               # Requires approval
+    vg exec "echo hello"       # Requires approval
+    vg exec "npm install"      # Requires approval
+    ```
+  </Tab>
+  
+  <Tab title="off">
+    **No Protection**
+    
+    ```yaml
+    guard_level:
+      level: off  # Disable guard (not recommended)
+    ```
+    
+    <Warning>
+    This disables all protection. Only use for testing!
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Auto-Detection Deep Dive
+
+When `level: auto`, Vectra Guard analyzes multiple signals to determine the appropriate protection level:
+
+### 1. Git Branch Detection
+
+<CodeGroup>
+```yaml Configuration
+production_indicators:
+  branches:
+    - main
+    - master
+    - production
+    - release
+    - live
+```
+
+```bash Examples
+# On feature branch
+git checkout feature/new-feature
+vg exec "deploy.sh"  # → medium level
+
+# On production branch
+git checkout main
+vg exec "deploy.sh"  # → paranoid level
+```
+</CodeGroup>
+
+### 2. Command Content Analysis
+
+Vectra Guard scans commands for production indicators:
+
+```bash
+# Commands with "prod" or "production"
+vg exec "kubectl apply -f prod-config.yaml"  # → high level
+vg exec "deploy-to-production.sh"            # → high level
+
+# Deploy commands
+vg exec "npm run deploy"                     # → high level
+vg exec "./deploy.sh"                        # → high level
+```
+
+### 3. URL and Hostname Detection
+
+```bash
+# Production URLs
+vg exec "curl https://api.production.company.com/deploy"  # → high
+vg exec "wget https://prod.example.com/data"              # → high
+
+# Development URLs
+vg exec "curl http://localhost:3000"                      # → low
+vg exec "curl https://dev.api.company.com"                # → low
+```
+
+### 4. Database Name Detection
+
+```bash
+# Production databases
+vg exec "psql prod_database -c 'SELECT * FROM users'"  # → high
+vg exec "mysql -h prod-db.company.com"                 # → high
+
+# Development databases
+vg exec "psql dev_database"                            # → low
+vg exec "sqlite3 local.db"                             # → low
+```
+
+### 5. File Path Detection
+
+```bash
+# Production paths
+vg exec "cp config.json /var/www/production/"  # → high
+vg exec "rm /opt/prod/cache/*"                 # → high
+
+# Development paths
+vg exec "cp file.txt /tmp/"                    # → low
+vg exec "mkdir ~/dev/new-project"              # → low
+```
+
+### 6. Environment Variable Detection
+
+```bash
+# Production environment
+ENV=production vg exec "node app.js"           # → high
+NODE_ENV=production vg exec "npm start"        # → high
+
+# Development environment
+ENV=development vg exec "node app.js"          # → low
+```
+
+## Production Indicators
+
+Teach Vectra Guard your organization's patterns:
+
+```yaml vectra-guard.yaml
+production_indicators:
+  # Git branches that indicate production
+  branches:
+    - main
+    - master
+    - production
+    - release
+    - live
+    - stable
+    
+  # Keywords in URLs, hostnames, database names, paths
+  keywords:
+    - prod
+    - production
+    - prd
+    - live
+    - staging
+    - stg
+    - uat
+    - preprod
+    # Add your org's patterns:
+    - company-prod
+    - api-live
+```
+
+<Tip>
+Customize these patterns to match your infrastructure naming conventions.
+</Tip>
+
+## Detection Priority
+
+When multiple signals conflict, **the most dangerous context wins** (safety first!):
+
+```bash
+# Example: On dev branch, but command has "prod" keyword
+git checkout dev/feature
+vg exec "deploy-to-prod.sh"
+# → Uses HIGH level (production detected in command)
+
+# Example: On main branch, safe command
+git checkout main  
+vg exec "git log"
+# → Uses PARANOID level (production branch)
+```
+
+**Priority Order:**
+1. Production branch → `paranoid`
+2. Production keywords in command → `high`
+3. Production URLs/databases → `high`
+4. Deploy-related commands → `high`
+5. Development context → `medium` or `low`
+
+## Environment Variable Overrides
+
+Override guard level at runtime:
+
+<CodeGroup>
+```bash Temporarily Lower
+# For trusted operations in prod environment
+VECTRA_GUARD_LEVEL=low vg exec "safe-script.sh"
+```
+
+```bash Force Paranoid
+# For extra caution in development
+VECTRA_GUARD_LEVEL=paranoid vg exec "experimental.sh"
+```
+
+```bash Bypass (If Allowed)
+# Only works if allow_user_bypass: true
+export VECTRAGUARD_BYPASS="i-am-human-$(whoami)"
+vg exec "command"
+```
+</CodeGroup>
+
+<Warning>
+`VECTRAGUARD_BYPASS` only works when `guard_level.allow_user_bypass: true` in config.
+</Warning>
+
+## Bypass Configuration
+
+Control whether users can override protection:
+
+```yaml
+guard_level:
+  level: auto
+  allow_user_bypass: true  # Allow env var override
+  bypass_env_var: VECTRAGUARD_BYPASS  # Custom var name
+```
+
+<Tabs>
+  <Tab title="Development">
+    ```yaml
+    guard_level:
+      level: auto
+      allow_user_bypass: true  # Allow bypasses in dev
+    ```
+    
+    Developers can override when needed:
+    ```bash
+    VECTRA_GUARD_LEVEL=low vg exec "trusted-script"
+    ```
+  </Tab>
+  
+  <Tab title="CI/CD">
+    ```yaml
+    guard_level:
+      level: high
+      allow_user_bypass: false  # No bypasses in CI
+    ```
+    
+    Prevents interactive prompts in automation:
+    - Auto-deny on suspicious commands
+    - Predictable behavior
+    - Full audit trail
+  </Tab>
+  
+  <Tab title="Production">
+    ```yaml
+    guard_level:
+      level: paranoid
+      allow_user_bypass: false  # No bypasses in prod
+    ```
+    
+    Maximum security:
+    - No way to bypass protection
+    - Every command requires approval
+    - Complete accountability
+  </Tab>
+</Tabs>
+
+## Guard Level Comparison
+
+| Level | Critical | High | Medium | Low | Best For |
+|-------|----------|------|--------|-----|----------|
+| `off` | ✅ Allow | ✅ Allow | ✅ Allow | ✅ Allow | Testing only |
+| `low` | ❌ Block | ⚠️ Warn | ✅ Allow | ✅ Allow | Trusted dev |
+| `medium` | ❌ Block | ❌ Block | ⚠️ Warn | ✅ Allow | Team dev |
+| `high` | ❌ Block | ❌ Block | ❌ Block | ✅ Allow | CI/CD |
+| `paranoid` | ❌ Block | ❌ Block | ❌ Block | ❌ Block | Production |
+| `auto` | 🤖 Smart | 🤖 Smart | 🤖 Smart | 🤖 Smart | Recommended |
+
+<Note>
+❌ Block = Requires explicit approval
+⚠️ Warn = Shows warning but allows
+✅ Allow = Executes automatically
+🤖 Smart = Adjusts based on context
+</Note>
+
+## Real-World Examples
+
+<Accordion title="Example 1: Development Workflow">
+```yaml
+guard_level:
+  level: auto
+  allow_user_bypass: true
+```
+
+**Scenario:**
+```bash
+# On feature branch - uses low/medium level
+git checkout feature/auth
+vg exec "npm install"           # ✅ Allowed
+vg exec "npm test"              # ✅ Allowed
+vg exec "git push"              # ✅ Allowed
+
+# Switch to main branch - bumps to paranoid
+git checkout main
+vg exec "npm publish"           # ❌ Requires approval
+vg exec "git push"              # ❌ Requires approval
+```
+</Accordion>
+
+<Accordion title="Example 2: CI/CD Pipeline">
+```yaml
+guard_level:
+  level: high
+  allow_user_bypass: false  # No interactive prompts
+```
+
+**Scenario:**
+```bash
+# In CI environment
+vg exec "npm ci"                # ✅ Allowed (low risk)
+vg exec "npm test"              # ✅ Allowed (low risk)
+vg exec "npm run build"         # ✅ Allowed (low risk)
+vg exec "curl | sh"             # ❌ Auto-denied (high risk)
+vg exec "rm -rf node_modules"   # ⚠️ Sandboxed (medium risk)
+```
+</Accordion>
+
+<Accordion title="Example 3: Production Deployment">
+```yaml
+guard_level:
+  level: paranoid
+  allow_user_bypass: false
+```
+
+**Scenario:**
+```bash
+# Every command requires explicit approval
+vg exec "ls"                    # ❌ Requires approval
+vg exec "cat config.json"       # ❌ Requires approval
+vg exec "./deploy.sh"           # ❌ Requires approval
+vg exec "git status"            # ❌ Requires approval
+
+# User must explicitly approve each operation
+# Full audit trail created
+```
+</Accordion>
+
+<Accordion title="Example 4: Contextual Detection">
+```yaml
+guard_level:
+  level: auto
+
+production_indicators:
+  branches:
+    - main
+    - release
+  keywords:
+    - prod
+    - production
+```
+
+**Scenario:**
+```bash
+# On dev branch, safe command
+git checkout dev/feature
+vg exec "npm install"           # → low (allowed)
+
+# On dev branch, production keyword in command
+vg exec "deploy-to-prod.sh"    # → high (requires approval)
+
+# On main branch, any command
+git checkout main
+vg exec "git log"              # → paranoid (requires approval)
+```
+</Accordion>
+
+## Approval Thresholds
+
+Fine-tune what requires approval:
+
+```yaml
+guard_level:
+  level: medium
+  require_approval_above: medium  # Require approval for medium+ severity
+```
+
+| Setting | Behavior |
+|---------|----------|
+| `low` | Approve low, medium, high, critical |
+| `medium` | Approve medium, high, critical |
+| `high` | Approve high, critical |
+| `critical` | Approve critical only |
+
+## Testing Your Configuration
+
+Validate guard level behavior:
+
+```bash
+# Test auto-detection
+vg explain "deploy-to-production.sh"
+vg explain "npm install"
+vg explain "curl https://api.prod.company.com"
+
+# Dry run
+vg exec --dry-run "risky-command"
+
+# View current level
+vg init --show-config | grep guard_level
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Auto" icon="robot">
+    Start with `level: auto` and let Vectra Guard intelligently adjust protection.
+  </Card>
+  
+  <Card title="Customize Indicators" icon="bullseye">
+    Add your organization's production patterns to `production_indicators`.
+  </Card>
+  
+  <Card title="No Bypasses in Prod" icon="lock">
+    Set `allow_user_bypass: false` in production environments.
+  </Card>
+  
+  <Card title="Test Detection" icon="flask">
+    Use `vg explain` to test how commands are evaluated.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<Accordion title="Auto-detection too aggressive">
+**Solutions:**
+1. Adjust production indicators to be more specific
+2. Use explicit level: `level: medium`
+3. Override with env var: `VECTRA_GUARD_LEVEL=low`
+</Accordion>
+
+<Accordion title="Not detecting production">
+**Solutions:**
+1. Add your patterns to `production_indicators.keywords`
+2. Add your branches to `production_indicators.branches`
+3. Use explicit level: `level: high` or `level: paranoid`
+</Accordion>
+
+<Accordion title="Too many approvals required">
+**Solutions:**
+1. Lower guard level: `level: medium` or `level: low`
+2. Add safe commands to allowlist
+3. Use auto mode: `level: auto`
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Sandbox Config" icon="box" href="/configuration/sandbox-config">
+    Configure where commands run (sandbox modes)
+  </Card>
+  
+  <Card title="Presets" icon="copy" href="/configuration/presets">
+    Use pre-configured guard levels for common scenarios
+  </Card>
+</CardGroup>

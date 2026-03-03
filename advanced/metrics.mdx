@@ -1,0 +1,440 @@
+---
+title: Metrics
+description: Track sandbox execution statistics and time saved
+---
+
+Metrics show you how Vectra Guard is protecting your system and saving time through intelligent caching. View execution counts, cache hit rates, and estimated time saved.
+
+## How It Works
+
+Vectra Guard tracks:
+- **Total executions** - All commands run through `vg exec`
+- **Sandbox vs host** - Where commands executed
+- **Cache hits** - How many sandbox runs used cache
+- **Duration** - Average execution time
+- **Risk levels** - Distribution of low/medium/high risk commands
+
+<Info>
+Metrics are stored locally in `~/.vectra-guard/metrics.json`
+</Info>
+
+## Core Commands
+
+### Show Metrics
+
+View metrics summary:
+
+```bash
+vg metrics show
+```
+
+**Example output:**
+```
+Vectra Guard Sandbox Metrics
+===============================
+Total Executions:    1,247
+  - Host:            834 (66.9%)   ← Trusted commands
+  - Sandbox:         413 (33.1%)   ← Risky commands  
+  - Cached:          389 (31.2%)   ← Cache hits! 🎉
+
+Average Duration:    0.8s
+
+By Risk Level:
+  - low: 834 (66.9%)     ← Running on host
+  - medium: 387 (31.0%)  ← Sandboxed but cached
+  - high: 26 (2.1%)      ← Sandboxed, slower
+
+By Runtime:
+  - docker: 413
+
+Time Saved (estimated): 4.2 hours this week! ⚡
+
+Last Updated: 2024-12-24T15:45:00Z
+```
+
+### JSON Output
+
+Get raw metrics data for programmatic use:
+
+```bash
+vg metrics show --json
+```
+
+**Example output:**
+```json
+{
+  "total_executions": 1247,
+  "host_executions": 834,
+  "sandbox_executions": 413,
+  "cached_executions": 389,
+  "average_duration_ms": 800,
+  "by_risk_level": {
+    "low": 834,
+    "medium": 387,
+    "high": 26
+  },
+  "by_runtime": {
+    "docker": 413
+  },
+  "time_saved_seconds": 15120,
+  "last_updated": "2024-12-24T15:45:00Z"
+}
+```
+
+<Tip>
+Use JSON output to integrate metrics into dashboards or monitoring tools.
+</Tip>
+
+### Reset Metrics
+
+Clear all metrics and start fresh:
+
+```bash
+vg metrics reset
+```
+
+**Output:**
+```
+✅ Metrics have been reset
+```
+
+<Note>
+Resetting metrics is permanent. Consider exporting metrics first if you need historical data.
+</Note>
+
+## Understanding Metrics
+
+### Execution Breakdown
+
+#### Host Executions
+
+Commands that ran directly on your machine:
+- **Trusted commands** from trust store
+- **Low-risk commands** in `auto` mode
+- **All commands** when sandbox is disabled
+
+```
+Host:            834 (66.9%)
+```
+
+#### Sandbox Executions
+
+Commands that ran in isolation:
+- **Medium/high-risk commands** in `auto` mode
+- **All commands** in `always` mode
+- **Untrusted commands** not in trust store
+
+```
+Sandbox:         413 (33.1%)
+```
+
+#### Cached Executions
+
+Sandbox runs that used cached dependencies:
+- npm, pip, cargo, go packages already downloaded
+- 10x faster than fresh installs
+- Subset of sandbox executions
+
+```
+Cached:          389 (31.2%)
+```
+
+<Info>
+Cached executions are included in sandbox executions. If you have 413 sandbox runs and 389 cached, that means 94% of sandbox runs hit the cache!
+</Info>
+
+### Risk Level Distribution
+
+Shows how commands were classified:
+
+```
+By Risk Level:
+  - low: 834 (66.9%)     ← Safe commands (ls, git status, etc.)
+  - medium: 387 (31.0%)  ← Package installs, builds
+  - high: 26 (2.1%)      ← Curl | sh, network operations
+```
+
+**What this tells you:**
+- High % of low-risk = Good! Most work is safe
+- High % of cached = Great! Cache is working
+- High % of high-risk = Review trust store and workflows
+
+### Runtime Distribution
+
+Shows which sandbox runtime was used:
+
+```
+By Runtime:
+  - docker: 413
+```
+
+**Possible runtimes:**
+- `docker` - Docker engine
+- `podman` - Podman (rootless containers)
+- `bubblewrap` - Linux namespace isolation
+- `host` - No sandbox (when disabled)
+
+### Time Saved Calculation
+
+Estimates time saved through caching:
+
+```
+Time Saved (estimated): 4.2 hours this week! ⚡
+```
+
+**How it's calculated:**
+```
+Cached runs × Average time without cache
+389 cached × 40s average = 15,560s = 4.3 hours saved
+```
+
+<Tip>
+Time saved grows over time as cache accumulates packages!
+</Tip>
+
+## Use Cases
+
+### Weekly Review
+
+Check your metrics every week:
+
+```bash
+vg metrics show
+```
+
+**Questions to ask:**
+- Am I hitting the cache often? (Good: >80%)
+- Are too many commands high-risk? (Review workflows)
+- How much time did I save? (Celebrate! 🎉)
+
+### Optimize Trust Store
+
+If many commands are sandboxed but low-risk, trust them:
+
+```bash
+# Check metrics
+vg metrics show
+# See: 200 medium-risk sandbox runs
+
+# Trust common commands
+vg trust add "npm test" --note "Safe test command"
+vg trust add "npm run build" --note "Safe build"
+
+# Check metrics again next week
+vg metrics show
+# See: More host executions, faster workflow
+```
+
+### Monitor Cache Effectiveness
+
+```bash
+vg metrics show --json | jq '.cached_executions / .sandbox_executions'
+# Output: 0.94 (94% cache hit rate)
+```
+
+**Target metrics:**
+- Cache hit rate: >80% (excellent)
+- Cache hit rate: 60-80% (good)
+- Cache hit rate: &lt;60% (review cache configuration)
+
+### Track Before/After Changes
+
+```bash
+# Before: Reset and track
+vg metrics reset
+# ... work for a week ...
+vg metrics show
+# Note time saved
+
+# After: Make changes to trust store
+vg trust add "npm install" --note "Safe for this project"
+vg metrics reset
+# ... work for another week ...
+vg metrics show
+# Compare time saved
+```
+
+## Integration with Other Features
+
+### Trust Store Impact
+
+Trusted commands show up as host executions:
+
+```bash
+# Add trusted commands
+vg trust add "npm test"
+vg trust add "git status"
+
+# Run them
+vg exec "npm test"      # → Host execution
+vg exec "git status"    # → Host execution
+
+# Check metrics
+vg metrics show
+# Host executions increased!
+```
+
+### Sandbox Mode Impact
+
+#### Always Mode (Default)
+
+```yaml
+sandbox:
+  mode: always
+```
+
+**Metrics:**
+- High sandbox executions
+- High cache hits (if caching enabled)
+- Low host executions (only trusted)
+
+#### Auto Mode
+
+```yaml
+sandbox:
+  mode: auto
+```
+
+**Metrics:**
+- More host executions (low-risk commands)
+- Fewer sandbox executions
+- Cache hits only for medium/high-risk
+
+#### Never Mode
+
+```yaml
+sandbox:
+  mode: never
+```
+
+**Metrics:**
+- All host executions
+- No sandbox executions
+- No cache hits
+
+### Session Tracking
+
+Metrics track commands across all sessions:
+
+```bash
+# Start session
+SESSION=$(vg session start --agent "cursor-ai")
+export VECTRAGUARD_SESSION_ID=$SESSION
+
+# Run commands (tracked in metrics)
+vg exec "npm install"  # Sandbox + cache
+vg exec "npm test"     # Host (if trusted)
+
+# End session
+vg session end $SESSION
+
+# Metrics updated
+vg metrics show
+```
+
+## Configuration
+
+Enable or disable metrics in `config.yaml`:
+
+```yaml
+sandbox:
+  enable_metrics: true  # Default: true
+```
+
+<Note>
+If metrics are disabled, `vg metrics show` will display a warning.
+</Note>
+
+## Performance Impact
+
+Metrics collection is lightweight:
+- **Write time:** &lt;1ms per execution
+- **Storage:** &lt;100KB for thousands of executions
+- **Read time:** &lt;10ms for `vg metrics show`
+
+<Tip>
+Metrics have negligible performance impact. Leave them enabled!
+</Tip>
+
+## Examples
+
+### Daily Workflow
+
+```bash
+# Morning: Check yesterday's metrics
+vg metrics show
+
+# Work all day
+vg exec "npm install express"
+vg exec "npm test"
+vg exec "npm run build"
+vg exec "git commit -m 'feat'"
+
+# Evening: Check today's stats
+vg metrics show
+# See time saved!
+```
+
+### Monthly Review
+
+```bash
+# Export metrics
+vg metrics show --json > metrics-$(date +%Y-%m).json
+
+# Review
+cat metrics-$(date +%Y-%m).json | jq '.time_saved_seconds / 3600'
+# Output: 42.5 (42.5 hours saved this month!)
+
+# Reset for next month
+vg metrics reset
+```
+
+### Team Comparison
+
+```bash
+# Each team member exports metrics
+vg metrics show --json > metrics-alice.json
+vg metrics show --json > metrics-bob.json
+
+# Compare cache hit rates
+cat metrics-alice.json | jq '.cached_executions / .sandbox_executions'
+cat metrics-bob.json | jq '.cached_executions / .sandbox_executions'
+
+# Share best practices based on results
+```
+
+## Metrics Storage
+
+Metrics are stored at:
+
+```
+~/.vectra-guard/metrics.json
+```
+
+**Example structure:**
+```json
+{
+  "total_executions": 1247,
+  "host_executions": 834,
+  "sandbox_executions": 413,
+  "cached_executions": 389,
+  "average_duration_ms": 800,
+  "by_risk_level": {
+    "low": 834,
+    "medium": 387,
+    "high": 26
+  },
+  "by_runtime": {
+    "docker": 413
+  },
+  "time_saved_seconds": 15120,
+  "last_updated": "2024-12-24T15:45:00Z"
+}
+```
+
+## Related Features
+
+- [Trust Store](/advanced/trust-store) - Optimize host execution %
+- [Context Summaries](/advanced/context-summaries) - Code navigation
+- [Roadmap Planning](/advanced/roadmap-planning) - Task tracking
+- [Sandbox Configuration](/configuration/sandbox-config) - Tune sandbox behavior

@@ -1,0 +1,243 @@
+---
+title: "vg roadmap"
+description: "Track development roadmap items and progress"
+---
+
+## Syntax
+
+```bash
+vectra-guard roadmap <subcommand> [options]
+vg roadmap <subcommand> [options]
+```
+
+## Description
+
+Manage a development roadmap with tracked items, status updates, and session-linked logs. Useful for tracking feature development, technical debt, and project milestones.
+
+## Subcommands
+
+### roadmap add
+
+Add a new roadmap item.
+
+```bash
+vg roadmap add --title <text> [--summary <text>] [--status <state>] [--tags <list>]
+```
+
+<ParamField path="--title" type="string" required>
+  Title of the roadmap item
+</ParamField>
+
+<ParamField path="--summary" type="string">
+  Detailed summary or description of the item
+</ParamField>
+
+<ParamField path="--status" type="string" default="planned">
+  Initial status: `planned`, `in-progress`, `completed`, `blocked`, `cancelled`
+</ParamField>
+
+<ParamField path="--tags" type="string">
+  Comma-separated tags for categorization (e.g., "feature,security,backend")
+</ParamField>
+
+### roadmap list
+
+List all roadmap items.
+
+```bash
+vg roadmap list [--status <state>]
+```
+
+<ParamField path="--status" type="string">
+  Filter by status (e.g., `in-progress`, `planned`)
+</ParamField>
+
+### roadmap show
+
+Show detailed information about a roadmap item.
+
+```bash
+vg roadmap show <item-id>
+```
+
+**Arguments**:
+- `item-id`: Unique identifier of the roadmap item
+
+### roadmap status
+
+Update the status of a roadmap item.
+
+```bash
+vg roadmap status <item-id> <new-status>
+```
+
+**Arguments**:
+- `item-id`: Unique identifier of the roadmap item
+- `new-status`: New status value (`planned`, `in-progress`, `completed`, `blocked`, `cancelled`)
+
+### roadmap log
+
+Add a log entry to a roadmap item.
+
+```bash
+vg roadmap log <item-id> --note <text> [--session <id>] [--source <name>]
+```
+
+**Arguments**:
+- `item-id`: Unique identifier of the roadmap item
+
+<ParamField path="--note" type="string" required>
+  Log note or update message
+</ParamField>
+
+<ParamField path="--session" type="string">
+  Reference a session ID to link this log entry to session activity
+</ParamField>
+
+<ParamField path="--source" type="string" default="manual">
+  Source of the log entry (e.g., `manual`, `agent`, `ci`)
+</ParamField>
+
+## Examples
+
+### Add a new feature
+
+```bash
+vg roadmap add \
+  --title "Add OAuth authentication" \
+  --summary "Implement OAuth 2.0 for GitHub and Google login" \
+  --status planned \
+  --tags "feature,auth,security"
+# Roadmap item created: rm-abc123
+```
+
+### List all items
+
+```bash
+vg roadmap list
+# Output (JSON format):
+# {
+#   "id": "rm-abc123",
+#   "title": "Add OAuth authentication",
+#   "status": "planned",
+#   "summary": "Implement OAuth 2.0 for GitHub and Google login",
+#   "tags": ["feature", "auth", "security"],
+#   "updated": "2026-03-03"
+# }
+```
+
+### Filter by status
+
+```bash
+vg roadmap list --status in-progress
+# Shows only items currently in progress
+```
+
+### Show item details
+
+```bash
+vg roadmap show rm-abc123
+# {
+#   "id": "rm-abc123",
+#   "title": "Add OAuth authentication",
+#   "status": "in-progress",
+#   "summary": "Implement OAuth 2.0 for GitHub and Google login",
+#   "tags": ["feature", "auth", "security"],
+#   "created": "2026-03-01 10:00:00",
+#   "updated": "2026-03-03 14:30:00",
+#   "logs": [
+#     {
+#       "time": "2026-03-03 14:30:00",
+#       "note": "OAuth flow implemented for GitHub",
+#       "session": "session-xyz789",
+#       "source": "manual"
+#     }
+#   ]
+# }
+```
+
+### Update status
+
+```bash
+vg roadmap status rm-abc123 in-progress
+# Status updated: planned → in-progress
+
+vg roadmap status rm-abc123 completed
+# Status updated: in-progress → completed
+```
+
+### Add progress logs
+
+```bash
+vg roadmap log rm-abc123 \
+  --note "Completed OAuth integration for GitHub" \
+  --session $VECTRAGUARD_SESSION_ID \
+  --source manual
+
+vg roadmap log rm-abc123 \
+  --note "Added tests for OAuth flows" \
+  --session $VECTRAGUARD_SESSION_ID
+```
+
+### Track during development session
+
+```bash
+# Start session
+SESSION=$(vg session start --agent "cursor-ai")
+export VECTRAGUARD_SESSION_ID=$SESSION
+
+# Create roadmap item
+ITEM=$(vg roadmap add --title "Fix auth bug" --status in-progress | jq -r '.id')
+
+# Do work...
+vg exec -- npm run test
+vg exec -- git commit -m "fix: auth validation"
+
+# Log progress
+vg roadmap log $ITEM \
+  --note "Fixed auth validation bug" \
+  --session $SESSION
+
+# Mark complete
+vg roadmap status $ITEM completed
+```
+
+### Track technical debt
+
+```bash
+vg roadmap add \
+  --title "Refactor authentication module" \
+  --summary "Current auth code needs cleanup and better error handling" \
+  --status planned \
+  --tags "tech-debt,refactor,auth"
+```
+
+### Manage blocked items
+
+```bash
+vg roadmap status rm-def456 blocked
+vg roadmap log rm-def456 \
+  --note "Blocked waiting for API key from vendor"
+```
+
+## Storage
+
+Roadmap data is stored in:
+```
+.vectra-guard/roadmap.json
+```
+
+Or in the configured workspace directory.
+
+## Use Cases
+
+- Track feature development progress
+- Log technical debt items
+- Link code changes to roadmap items via sessions
+- Review project milestones
+- Generate progress reports
+
+## Related Commands
+
+- [session](/cli/session) - Track execution sessions (can be linked to roadmap)
+- [audit session](/cli/audit#audit-session) - Audit session activity

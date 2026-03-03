@@ -1,0 +1,552 @@
+---
+title: Code Security Scanning
+description: Detect risky code patterns and deployment misconfigurations
+---
+
+Vectra Guard's security scanner identifies risky code patterns, unsafe function calls, and deployment misconfigurations across Go, Python, C, and configuration files. It helps prevent common vulnerabilities like command injection, buffer overflows, and exposed control panels.
+
+## Quick Start
+
+```bash
+# Scan all supported languages
+vg scan-security --path .
+
+# Scan specific languages
+vg scan-security --path . --languages go,python
+
+# Include config files (YAML/JSON)
+vg scan-security --path . --languages go,python,c,config
+```
+
+<Note>
+The `scan-security` command exits with code 2 when security issues are detected, making it ideal for CI/CD enforcement.
+</Note>
+
+## Language Support
+
+Vectra Guard scans code in multiple languages:
+
+| Language | File Extensions | Default |
+|----------|----------------|--------|
+| **Go** | `.go` | ✅ Yes |
+| **Python** | `.py` | ✅ Yes |
+| **C** | `.c`, `.h` | ✅ Yes |
+| **Config** | `.yaml`, `.yml`, `.json` | ❌ No (must specify) |
+
+**Default languages**: If you don't specify `--languages`, the scanner checks Go, Python, and C only.
+
+**Include config files**:
+```bash
+vg scan-security --path . --languages go,python,c,config
+```
+
+## What's Detected
+
+### Command Execution Risks
+
+Detects unsafe command execution patterns that could lead to command injection:
+
+**Go:**
+```go
+// GO_EXEC_COMMAND (high)
+exec.Command("sh", "-c", userInput)  // Validate inputs!
+
+// GO_DANGEROUS_SHELL (critical)
+exec.Command("sh", "-c", "rm -rf /")  // Dangerous pattern!
+```
+
+**Python:**
+```python
+# PY_SUBPROCESS (medium)
+import subprocess
+subprocess.call(user_input, shell=True)  # Validate!
+
+# PY_EVAL / PY_EXEC (high)
+eval(user_code)  // Never use with untrusted input
+```
+
+**C:**
+```c
+// C_SHELL_EXEC (high)
+system(user_command);  // Unsafe with untrusted input
+
+// C_SHELL_EXEC (high)
+popen("ls -la", "r");  // Validate inputs
+```
+
+### Network and HTTP Risks
+
+Flags external HTTP requests and network operations:
+
+**Go:**
+```go
+// GO_NET_HTTP (medium)
+import "net/http"  // Ensure auth and sanitization
+
+// GO_EXTERNAL_HTTP (medium)
+http.Get("https://api.example.com")  // SSRF risk with user input
+```
+
+**Python:**
+```python
+# PY_REMOTE_HTTP (medium)
+import requests
+requests.get(user_url)  # Validate URLs to prevent SSRF
+
+# PY_EXTERNAL_HTTP (medium)
+url = "https://external.com/api"  # Non-localhost URL
+```
+
+### Deployment Security
+
+Detects risky deployment configurations (use `--languages config`):
+
+#### Bind to All Interfaces (0.0.0.0)
+
+**Config files:**
+```yaml
+# BIND_ALL_INTERFACES (medium)
+server:
+  host: 0.0.0.0  # Exposes service on all interfaces!
+  port: 8080
+```
+
+**Go code:**
+```go
+// BIND_ALL_INTERFACES (medium)
+http.ListenAndServe("0.0.0.0:8080", nil)  // Ensure auth + TLS
+```
+
+**Python code:**
+```python
+# BIND_ALL_INTERFACES (medium)
+app.run(host="0.0.0.0", port=5000)  # Ensure auth + TLS
+```
+
+<Warning>
+Binding to `0.0.0.0` exposes your service to the internet if the machine has a public IP. Always:
+- Use authentication (API keys, OAuth, etc.)
+- Enable TLS/HTTPS
+- Consider binding to `127.0.0.1` instead for local-only access
+</Warning>
+
+#### Trust Proxy Misconfigurations
+
+```yaml
+# LOCALHOST_TRUST_PROXY (medium)
+server:
+  trustProxy: true  # Can treat remote clients as local!
+  bypassAuthForLocalhost: true  # Dangerous with trustProxy!
+```
+
+<Warning>
+When `trustProxy` is enabled, the server trusts `X-Forwarded-For` headers. Attackers can forge these headers to appear as localhost and bypass authentication. See the Moltbot/Clawdbot security alert for real-world impact.
+</Warning>
+
+#### Unauthenticated Access
+
+```yaml
+# UNAUTHENTICATED_ACCESS (high)
+admin:
+  authentication: false  # Control panel without auth!
+  secure: off  # No TLS!
+```
+
+### Unsafe Functions and Buffer Overflows (C)
+
+```c
+// C_GETS (critical)
+gets(buffer);  // Inherently unsafe - always remove!
+
+// C_UNSAFE_STRING (high)
+strcpy(dest, src);  // Buffer overflow risk
+strcat(dest, src);  // Buffer overflow risk
+
+// C_MEMCPY (medium)
+memcpy(dest, src, len);  // Validate bounds
+```
+
+### Environment and Secrets Access
+
+**Go:**
+```go
+// GO_ENV_READ (medium)
+token := os.Getenv("API_TOKEN")  // Avoid leaking in logs
+
+// GO_SYSTEM_WRITE (high)
+os.WriteFile("/etc/config", data, 0644)  // Writing to system dir
+```
+
+**Python:**
+```python
+# PY_ENV_ACCESS (medium)
+api_key = os.environ.get("API_KEY")  // Don't expose in responses
+
+# PY_ENV_ACCESS (medium)
+from dotenv import load_dotenv  # .env access
+```
+
+## Command Reference
+
+### Basic Usage
+
+```bash
+vectra-guard scan-security --path <directory> [--languages <lang1,lang2>]
+```
+
+### Options
+
+| Flag | Description | Default |
+|------|-------------|--------|
+| `--path` | Directory or file to scan | `.` |
+| `--languages` | Comma-separated list: `go,python,c,config` | `go,python,c` |
+
+### Exit Codes
+
+- **0**: No security issues found
+- **2**: Security issues detected (use in CI)
+
+## Rule Reference
+
+### Go Rules
+
+| Code | Severity | Description |
+|------|----------|-------------|
+| `GO_EXEC_COMMAND` | high | Use of `exec.Command`; validate and sandbox inputs |
+| `GO_DANGEROUS_SHELL` | critical | Dangerous shell pattern (e.g., `rm -rf /`, `curl \| sh`) |
+| `GO_NET_HTTP` | medium | Use of `net/http`; ensure auth and sanitization |
+| `GO_ENV_READ` | medium | Environment variable access; avoid credential leaks |
+| `GO_SYSTEM_WRITE` | high | Writing to `/etc`, `/var`, `/usr`; review for safety |
+| `GO_EXTERNAL_HTTP` | medium | Non-localhost HTTP(S) URL; SSRF risk with untrusted input |
+| `BIND_ALL_INTERFACES` | medium | Binding to 0.0.0.0; ensure auth and TLS |
+
+### Python Rules
+
+| Code | Severity | Description |
+|------|----------|-------------|
+| `PY_EVAL` | high | Use of `eval()`; avoid untrusted input |
+| `PY_EXEC` | high | Use of `exec()`; avoid untrusted input |
+| `PY_SUBPROCESS` | medium | Use of subprocess/os.system; validate commands |
+| `PY_REMOTE_HTTP` | medium | Remote HTTP (requests); validate URLs/responses |
+| `PY_ENV_ACCESS` | medium | Environment or .env access; avoid secret exposure |
+| `PY_EXTERNAL_HTTP` | medium | Non-localhost HTTP(S) URL; SSRF risk |
+| `BIND_ALL_INTERFACES` | medium | Binding to 0.0.0.0; ensure auth and TLS |
+
+### C Rules
+
+| Code | Severity | Description |
+|------|----------|-------------|
+| `C_SHELL_EXEC` | high | Use of system/popen/exec*; avoid untrusted input |
+| `C_GETS` | critical | Use of `gets()`; inherently unsafe, remove immediately |
+| `C_UNSAFE_STRING` | high | strcpy/strcat; buffer overflow risk |
+| `C_MEMCPY` | medium | memcpy; validate bounds |
+| `C_RAW_SOCKET` | medium | Raw socket use; review for abuse |
+| `BIND_ALL_INTERFACES` | medium | Binding to 0.0.0.0; ensure auth and TLS |
+
+### Config Rules
+
+Scans `.yaml`, `.yml`, `.json` when `config` is included:
+
+| Code | Severity | Description |
+|------|----------|-------------|
+| `BIND_ALL_INTERFACES` | medium | Config binds to 0.0.0.0; control panels need auth/TLS |
+| `LOCALHOST_TRUST_PROXY` | medium | trustProxy/X-Forwarded-For; ensure auth not bypassed |
+| `UNAUTHENTICATED_ACCESS` | high | auth/secure set to false; require authentication |
+
+## Output Format
+
+Findings are logged with full context:
+
+```json
+{
+  "level": "warn",
+  "msg": "security finding",
+  "file": "src/server.go",
+  "line": 42,
+  "language": "go",
+  "severity": "medium",
+  "code": "BIND_ALL_INTERFACES",
+  "description": "Binding to 0.0.0.0 exposes the service on all interfaces; ensure auth and TLS are enabled."
+}
+```
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml
+name: Security Scan
+
+on: [push, pull_request]
+
+jobs:
+  code-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Vectra Guard
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      
+      - name: Scan security (code + config)
+        run: vg scan-security --path . --languages go,python,c,config
+```
+
+### GitLab CI
+
+```yaml
+scan-security:
+  stage: security
+  image: ubuntu:latest
+  before_script:
+    - apt-get update && apt-get install -y curl
+    - curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+    - export PATH="$HOME/.local/bin:$PATH"
+  script:
+    - vg scan-security --path . --languages go,python,c,config
+  only:
+    - merge_requests
+    - main
+```
+
+### Combined Security Scan
+
+Scan for both secrets and code security issues:
+
+```yaml
+- name: Full security scan
+  run: |
+    vg scan-secrets --path .
+    vg scan-security --path . --languages go,python,c,config
+```
+
+## Examples
+
+### Example 1: Clean Codebase
+
+```bash
+$ vg scan-security --path .
+{"level":"info","msg":"security scan completed (no findings)","path":"."}
+```
+
+### Example 2: Detected Issues
+
+```bash
+$ vg scan-security --path ./src --languages go,python,config
+{"level":"warn","msg":"security finding","file":"src/server.go","line":15,"language":"go","severity":"medium","code":"BIND_ALL_INTERFACES","description":"Binding to 0.0.0.0..."}
+{"level":"warn","msg":"security finding","file":"src/api.py","line":42,"language":"python","severity":"high","code":"PY_EVAL","description":"Use of eval()..."}
+{"level":"warn","msg":"security finding","file":"config/server.yaml","line":8,"language":"config","severity":"high","code":"UNAUTHENTICATED_ACCESS","description":"Config disables auth..."}
+```
+
+Exit code: 2 (issues detected)
+
+### Example 3: Single Language
+
+```bash
+# Scan only Python files
+$ vg scan-security --path . --languages python
+{"level":"info","msg":"security scan completed (no findings)","path":"."}
+```
+
+## Detection Behavior
+
+### Comment Filtering
+
+Lines that are only comments do not produce findings:
+
+```go
+// This is NOT flagged:
+// Example: http.Get("https://api.example.com")
+
+// This IS flagged:
+http.Get("https://api.example.com")  // Real code
+```
+
+Supported comment styles:
+- **Python**: `#`
+- **Go/C**: `//`, `/*`
+- **Config**: `#`
+
+### File and Directory Skipping
+
+The scanner automatically skips:
+
+**Directories:**
+- `.git/`, `node_modules/`, `vendor/`
+- `.venv/`, `venv/`, `dist/`, `build/`
+
+**Files:**
+- Binary files (detected automatically)
+- Files not matching selected language extensions
+
+## Best Practices
+
+### 1. Include Config Files
+
+Always scan configuration files for deployment issues:
+
+```bash
+vg scan-security --path . --languages go,python,c,config
+```
+
+### 2. Fix Critical Issues First
+
+Prioritize findings by severity:
+
+1. **Critical**: Immediate fix required (e.g., `C_GETS`, `GO_DANGEROUS_SHELL`)
+2. **High**: Fix before deployment (e.g., `PY_EVAL`, `UNAUTHENTICATED_ACCESS`)
+3. **Medium**: Review and mitigate (e.g., `BIND_ALL_INTERFACES`, `GO_NET_HTTP`)
+
+### 3. Secure Deployment Configs
+
+For services binding to 0.0.0.0:
+
+```yaml
+# ✅ Good - with auth and TLS
+server:
+  host: 0.0.0.0
+  port: 8443
+  tls:
+    enabled: true
+    cert: /path/to/cert.pem
+    key: /path/to/key.pem
+  auth:
+    enabled: true
+    type: bearer
+
+# ❌ Bad - exposed without protection
+server:
+  host: 0.0.0.0
+  port: 8080
+  auth: false
+```
+
+### 4. Validate User Input
+
+For command execution findings:
+
+```python
+# ❌ Bad - command injection risk
+import subprocess
+subprocess.call(f"ls {user_path}", shell=True)
+
+# ✅ Good - validated input
+import subprocess
+import shlex
+if user_path.startswith("/safe/dir/"):
+    subprocess.call(["ls", user_path])  # Array form, no shell
+```
+
+### 5. Use Localhost for Development
+
+Bind to `127.0.0.1` instead of `0.0.0.0` for local development:
+
+```python
+# Development
+app.run(host="127.0.0.1", port=5000)  # Local only
+
+# Production (with auth + TLS)
+app.run(host="0.0.0.0", port=443, ssl_context=context)
+```
+
+## Real-World Use Case: Control Panel Security
+
+The Moltbot/Clawdbot security incident involved exposed AI control panels due to:
+
+1. **Binding to 0.0.0.0** without authentication
+2. **Trust proxy enabled** (treating remote clients as localhost)
+3. **Authentication bypassed** for "localhost" requests
+
+Vectra Guard detects all three issues:
+
+```bash
+$ vg scan-security --path . --languages go,python,config
+
+# Would have detected:
+# 1. BIND_ALL_INTERFACES (medium)
+# 2. LOCALHOST_TRUST_PROXY (medium)
+# 3. UNAUTHENTICATED_ACCESS (high)
+```
+
+<Note>
+See the [Security Threat Model](/security/threat-model) for the complete checklist and mitigation strategies.
+</Note>
+
+## Troubleshooting
+
+### False Positives
+
+**Problem**: Legitimate code flagged as risky.
+
+**Solution**: If the code is actually safe:
+1. Review the finding to understand the risk
+2. Add code comments explaining the safety measures
+3. Future versions will support per-repo allowlists
+
+### Performance
+
+**Problem**: Scanning large codebases is slow.
+
+**Solution**:
+```bash
+# Scan specific directories
+vg scan-security --path ./src --languages go
+
+# Or scan by language separately
+vg scan-security --path . --languages go
+vg scan-security --path . --languages python
+```
+
+### Missing Findings
+
+**Problem**: Known risky code not detected.
+
+**Possible causes**:
+1. Language not in scan list (add via `--languages`)
+2. File in skipped directory (`vendor/`, `.venv/`, etc.)
+3. Pattern not yet in ruleset
+
+**Solution**: Report the pattern for inclusion in future releases.
+
+## Related Commands
+
+- **`vg scan-secrets`**: Detect exposed credentials and API keys
+- **`vg audit repo`**: Comprehensive repository audit (includes code scan)
+- **`vg validate`**: Analyze shell scripts for dangerous patterns
+- **`vg exec`**: Execute commands safely in a sandbox
+
+## Implementation Details
+
+<Accordion title="Scanner Architecture">
+The security scanner (`internal/secscan/secscan.go`) uses:
+
+1. **Language detection**: By file extension (`.go`, `.py`, `.c`, `.yaml`, `.json`)
+2. **Line-by-line scanning**: Regex-based pattern matching
+3. **Comment filtering**: Skips lines that are only comments
+4. **Multi-language support**: Separate rule sets per language
+5. **Severity classification**: critical/high/medium based on risk
+
+**Locations**:  
+- Command: `/home/daytona/workspace/source/cmd/scan_security.go:12`  
+- Scanner: `/home/daytona/workspace/source/internal/secscan/secscan.go:31`
+</Accordion>
+
+## Security Considerations
+
+<Warning>
+**Limitations**
+
+1. **Static analysis only**: Cannot detect runtime behaviors or complex logic
+2. **Pattern-based**: May miss obfuscated or unusual patterns
+3. **No data flow analysis**: Doesn't track where user input flows
+4. **Configuration context**: Cannot determine if other security controls exist
+
+**Use as part of defense in depth:**
+- Combine with dynamic testing (penetration testing)
+- Use web application firewalls (WAFs)
+- Implement proper authentication and authorization
+- Follow secure coding practices
+- Regular security audits
+</Warning>

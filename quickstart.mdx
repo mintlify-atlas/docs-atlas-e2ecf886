@@ -1,80 +1,305 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get started with Vectra Guard in under 5 minutes
 ---
 
-## Get started in three steps
+# Quickstart
 
-Get your documentation site running locally and make your first customization.
+Get Vectra Guard running and execute your first protected command in under 5 minutes.
 
-### Step 1: Set up your local environment
+## What you'll achieve
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+After following this guide:
+
+- Commands run with `vectra-guard exec` will be protected
+- Risky commands will be caught or sandboxed automatically
+- Full audit trail of everything executed
+- CVE scanning for known vulnerable dependencies
+- Secret and code scanning capabilities
+
+<Steps>
+  <Step title="Install Vectra Guard">
+    Install with a single command:
+
+    **macOS and Linux:**
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+    ```
+
+    **Windows (PowerShell):**
+    ```powershell
+    irm https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/scripts/install-windows.ps1 | iex
+    ```
+
+    The installer defaults to user-space (`$HOME/.local/bin` on Unix, `%LOCALAPPDATA%\VectraGuard` on Windows). Ensure the install directory is on your `PATH`.
+
+    <Tip>
+      The installer will prompt to add the install directory to your PATH automatically. For this shell session, run:
+      ```bash
+      export PATH="$PATH:$HOME/.local/bin"
+      alias vg='vectra-guard'
+      ```
+    </Tip>
+  </Step>
+
+  <Step title="Start a session">
+    Sessions enable command tracking and audit trails:
+
+    ```bash
+    SESSION=$(vectra-guard session start --agent "manual")
+    export VECTRAGUARD_SESSION_ID=$SESSION
+    ```
+
+    <Note>
+      The session ID is stored in `$VECTRAGUARD_SESSION_ID`. All commands executed within this session will be tracked.
+    </Note>
+
+    **Verify the session started:**
+    ```bash
+    echo $VECTRAGUARD_SESSION_ID
+    ```
+
+    **Expected output:**
+    ```
+    session-1234567890
+    ```
+  </Step>
+
+  <Step title="Run your first protected command">
+    Execute a simple command through Vectra Guard:
+
+    ```bash
+    vectra-guard exec -- echo "Hello, Vectra Guard!"
+    ```
+
+    **Expected output:**
+    ```
+    Hello, Vectra Guard!
+    ```
+
+    The command executed successfully and was logged to your session.
+
+    <Tip>
+      Use the `vg` alias for faster workflows:
+      ```bash
+      vg exec -- echo "Hello, Vectra Guard!"
+      ```
+    </Tip>
+  </Step>
+
+  <Step title="Try a risky command">
+    See how Vectra Guard handles potentially dangerous operations:
+
+    ```bash
+    vectra-guard exec -- rm -rf /tmp/test-file
+    ```
+
+    **Expected output:**
+    ```
+    ⚠️  Risk detected: medium
+    Command: rm -rf /tmp/test-file
+    Reason: Recursive deletion detected
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    [Command executed with monitoring]
+    ```
+
+    The command was analyzed, risk level assessed, and logged for audit.
+
+    <Warning>
+      High-risk commands like `rm -rf /` or `rm -rf /etc` are blocked automatically and will not execute.
+    </Warning>
+  </Step>
+
+  <Step title="Audit your session">
+    Review what commands were executed:
+
+    ```bash
+    vectra-guard audit session
+    ```
+
+    **Example output:**
+    ```
+    Session: session-1234567890
+    Agent: manual
+    Started: 2026-03-03T10:30:00Z
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    Commands executed:
+    1. [2026-03-03T10:30:15Z] echo "Hello, Vectra Guard!" (low risk)
+    2. [2026-03-03T10:31:22Z] rm -rf /tmp/test-file (medium risk)
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    Total commands: 2
+    High risk: 0
+    Medium risk: 1
+    Low risk: 1
+    ```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    You can also view a specific session:
+    ```bash
+    vectra-guard session show $VECTRAGUARD_SESSION_ID
+    ```
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Validate a script">
+    Check a script for security risks without executing it:
 
-### Step 3: Go live
+    ```bash
+    vectra-guard validate my-script.sh
+    ```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    **Example output:**
+    ```
+    Validating: my-script.sh
+    
+    ✅ Script analysis complete
+    Risk level: LOW
+    
+    No critical issues found.
+    ```
+
+    For a detailed explanation of risks:
+    ```bash
+    vectra-guard explain my-script.sh
+    ```
+  </Step>
+
+  <Step title="Run a CVE scan">
+    Scan your project for known vulnerabilities:
+
+    ```bash
+    # Sync the CVE database (first time only)
+    vectra-guard cve sync --path .
+    
+    # Scan for vulnerabilities
+    vectra-guard cve scan --path .
+    ```
+
+    **Example output:**
+    ```
+    Scanning for CVEs in: .
+    
+    Found vulnerabilities:
+    - lodash@4.17.20 (HIGH): Prototype pollution
+      CVE-2020-8203
+    
+    Total packages scanned: 847
+    Vulnerabilities found: 1
+    ```
+
+    Get details about a specific vulnerability:
+    ```bash
+    vectra-guard cve explain lodash@4.17.20 --ecosystem npm
+    ```
+  </Step>
+</Steps>
+
+## Common workflows
+
+### Daily development
+
+```bash
+# Start your day with a new session
+SESSION=$(vg session start --agent "manual")
+export VECTRAGUARD_SESSION_ID=$SESSION
+
+# Install dependencies safely
+vg exec -- npm install
+
+# Run tests
+vg exec -- npm test
+
+# Review what you did
+vg audit session
+```
+
+### Working with AI agents
+
+```bash
+# Session automatically tracks AI-suggested commands
+vg exec -- npm install express
+vg exec -- npm run build
+
+# Review what the AI did
+vg session show $VECTRAGUARD_SESSION_ID
+```
+
+### Validating deployment scripts
+
+```bash
+# Check a script before running
+vg validate deploy.sh
+
+# Get detailed risk explanation
+vg explain deploy.sh
+
+# If safe, execute it
+vg exec -- ./deploy.sh
+```
+
+## Sandbox mode
+
+By default, Vectra Guard runs all commands in a sandbox for maximum security with intelligent caching for 10x faster installs.
+
+```bash
+# All commands run in sandbox (default)
+vg exec -- npm install  # First run: normal speed
+vg exec -- npm install  # Subsequent runs: 10x faster with cache
+```
+
+<Note>
+  Cache directories like `~/.npm`, `~/.cache/pip`, `~/.cargo`, etc. are automatically mounted into the sandbox, giving you speed without sacrificing security.
+</Note>
+
+## Trust store
+
+Approve frequently used commands to skip the sandbox:
+
+```bash
+# Run with interactive approval
+vg exec --interactive -- npm test
+
+# Options:
+# y - Yes, run once
+# r - Yes, and remember (trust permanently)
+# n - No, cancel
+
+Choose: r
+
+# Now 'npm test' runs instantly on host
+vg exec -- npm test  # ⚡ Instant, no sandbox
+```
+
+Manage trusted commands:
+```bash
+# List trusted commands
+vg trust list
+
+# Add a trusted command
+vg trust add "npm run dev" --note "Dev server"
+
+# Remove a trusted command
+vg trust remove "npm test"
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Installation guide" icon="download" href="/installation">
+    Detailed installation instructions and troubleshooting
+  </Card>
+  
+  <Card title="Configuration" icon="sliders" href="/configuration">
+    Configure policies, sandbox settings, and more
+  </Card>
+  
+  <Card title="Session management" icon="list-check" href="/sessions">
+    Learn about sessions and audit trails
+  </Card>
+  
+  <Card title="CVE scanning" icon="bug" href="/cve-scanning">
+    Deep dive into vulnerability scanning
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+<Tip>
+  Run `vg help` to see all available commands, or `vg help <command>` for detailed usage of a specific command.
+</Tip>

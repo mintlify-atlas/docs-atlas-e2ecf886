@@ -1,0 +1,172 @@
+---
+title: "vg metrics"
+description: "View and manage sandbox execution metrics"
+---
+
+## Syntax
+
+```bash
+vectra-guard metrics <subcommand> [options]
+vg metrics <subcommand> [options]
+```
+
+## Description
+
+View performance metrics for sandbox executions including cache hit rates, execution counts, and resource usage.
+
+## Subcommands
+
+### metrics show
+
+Display current metrics.
+
+```bash
+vg metrics show [--json]
+```
+
+<ParamField path="--json" type="boolean" default="false">
+  Output metrics in JSON format instead of human-readable summary
+</ParamField>
+
+### metrics reset
+
+Reset all metrics to zero.
+
+```bash
+vg metrics reset
+```
+
+## Configuration
+
+Metrics collection must be enabled in your config:
+
+```yaml
+sandbox:
+  enable_metrics: true
+```
+
+## Examples
+
+### View current metrics
+
+```bash
+vg metrics show
+# Sandbox Metrics Summary:
+# ═══════════════════════════════════════
+# Total Executions:        127
+#   ├─ Host:               85 (66.9%)
+#   └─ Sandbox:            42 (33.1%)
+#
+# Cache Performance:
+#   ├─ Hits:               38 (90.5%)
+#   └─ Misses:             4  (9.5%)
+#
+# Risk Distribution:
+#   ├─ Low:                92 (72.4%)
+#   ├─ Medium:             28 (22.0%)
+#   ├─ High:               6  (4.7%)
+#   └─ Critical:           1  (0.8%)
+#
+# Blocked Commands:        3
+# Bypassed:                2
+```
+
+### JSON output for monitoring
+
+```bash
+vg metrics show --json
+# {
+#   "total_executions": 127,
+#   "sandbox_executions": 42,
+#   "host_executions": 85,
+#   "cache_hits": 38,
+#   "cache_misses": 4,
+#   "risk_distribution": {
+#     "low": 92,
+#     "medium": 28,
+#     "high": 6,
+#     "critical": 1
+#   },
+#   "blocked_commands": 3,
+#   "bypassed": 2
+# }
+```
+
+### Reset metrics
+
+```bash
+vg metrics reset
+# ✅ Metrics have been reset
+```
+
+### Monitor cache effectiveness
+
+```bash
+vg metrics show --json | jq '.cache_hits / (.cache_hits + .cache_misses) * 100'
+# 90.48  (cache hit rate percentage)
+```
+
+### Integration with monitoring tools
+
+```bash
+#!/bin/bash
+# Export to Prometheus format
+METRICS=$(vg metrics show --json)
+echo "vg_total_executions $(echo $METRICS | jq '.total_executions')"
+echo "vg_sandbox_executions $(echo $METRICS | jq '.sandbox_executions')"
+echo "vg_cache_hit_rate $(echo $METRICS | jq '.cache_hits / (.cache_hits + .cache_misses)')"
+```
+
+### Periodic metrics collection
+
+```bash
+# Cron job: Log metrics daily
+0 0 * * * /usr/local/bin/vg metrics show --json >> /var/log/vg-metrics.jsonl
+```
+
+## Metrics Tracked
+
+### Execution Counts
+- **Total executions**: All commands executed via `vg exec`
+- **Sandbox executions**: Commands run in isolated sandbox
+- **Host executions**: Commands run directly on host
+- **Blocked commands**: Commands denied by security policies
+- **Bypassed**: Commands executed with `VECTRAGUARD_BYPASS`
+
+### Cache Performance
+- **Cache hits**: Sandbox cache hits (dependencies already cached)
+- **Cache misses**: Sandbox cache misses (fresh install required)
+- **Hit rate**: Percentage of cache hits
+
+### Risk Distribution
+- Count of commands by risk level: low, medium, high, critical
+
+## Use Cases
+
+### Performance optimization
+```bash
+# Check cache efficiency
+vg metrics show --json | jq '.cache_hits / .sandbox_executions'
+# If low, consider pre-warming cache with common commands
+```
+
+### Security monitoring
+```bash
+# Alert on high blocked command rate
+BLOCKED=$(vg metrics show --json | jq '.blocked_commands')
+if [ $BLOCKED -gt 10 ]; then
+  echo "Alert: High number of blocked commands!"
+fi
+```
+
+### Resource planning
+```bash
+# Analyze sandbox vs host ratio
+vg metrics show --json | jq '.sandbox_executions / .total_executions'
+# Helps size sandbox infrastructure
+```
+
+## Related Commands
+
+- [exec](/cli/exec) - Execute commands (generates metrics)
+- [audit session](/cli/audit#audit-session) - Detailed session audit

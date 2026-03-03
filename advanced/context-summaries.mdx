@@ -1,0 +1,407 @@
+---
+title: Context Summaries
+description: Generate summaries of code and documentation for faster navigation
+---
+
+Context summaries help you and AI agents quickly understand codebases by extracting key highlights from files. Perfect for onboarding, code reviews, and giving agents context about your project.
+
+## How It Works
+
+Vectra Guard analyzes files and extracts:
+- **Code mode:** Functions, classes, imports, key logic
+- **Docs mode:** Headings, key points, examples
+- **Advanced mode:** Deeper analysis including dependencies and patterns
+
+Results are **cached** for fast repeated access.
+
+## Core Command
+
+The main command is `context summarize` with three modes:
+
+```bash
+vg context summarize <mode> <path> [flags]
+```
+
+**Modes:**
+- `code` - Summarize source code files
+- `docs` - Summarize documentation files
+- `advanced` - Deep analysis of code structure
+
+## Code Mode
+
+Summarize source code to extract functions, classes, and key logic:
+
+### Single File
+
+```bash
+vg context summarize code cmd/root.go --max 5
+```
+
+**Example output:**
+```
+CLI entry point, subcommand routing
+Defines root command with validate, exec, session subcommands
+Initializes config and logger
+Handles version flag
+Sets up signal handling for graceful shutdown
+```
+
+### Entire Repository
+
+```bash
+vg context summarize code . --max 5
+```
+
+**Example output:**
+```
+📄 cmd/root.go
+────────────────────────────────────────────────────────────
+  CLI entry point, subcommand routing
+  Defines root command with validate, exec, session subcommands
+  Initializes config and logger
+  Handles version flag
+  Sets up signal handling for graceful shutdown
+
+📄 internal/sandbox/sandbox.go
+────────────────────────────────────────────────────────────
+  Execution mode decision logic
+  Determines if command should run in sandbox
+  Implements Docker, Podman, and namespace runtimes
+  Cache mounting for fast dependency installs
+  Trust store integration
+
+📄 internal/cve/scanner.go
+────────────────────────────────────────────────────────────
+  Manifest parsing + OSV lookup
+  Scans package.json, requirements.txt, go.mod
+  Queries OSV API for vulnerabilities
+  Generates CVE reports
+  Caches vulnerability data
+```
+
+<Info>
+When summarizing a directory, Vectra Guard automatically walks the tree and processes all relevant files.
+</Info>
+
+## Docs Mode
+
+Summarize documentation files (Markdown, text files):
+
+### Single Doc File
+
+```bash
+vg context summarize docs README.md --max 3
+```
+
+**Example output:**
+```
+Security guard for AI coding agents & development workflows
+Blocks dangerous commands like rm -rf /, curl | sh
+Provides CVE scanning, sandbox execution, and audit trails
+```
+
+### All Documentation
+
+```bash
+vg context summarize docs . --max 3
+```
+
+**Processes:**
+- `.md` files (Markdown)
+- `.txt` files (plain text)
+- `.rst` files (reStructuredText)
+- `README`, `LICENSE`, `CHANGELOG` (any extension)
+
+## Advanced Mode
+
+Deeper analysis including dependencies and architectural patterns:
+
+```bash
+vg context summarize advanced internal/ --max 3
+```
+
+**Example output:**
+```
+📄 internal/sandbox/executor.go
+────────────────────────────────────────────────────────────
+  Depends on: config, logging, analyzer packages
+  Implements ExecutorInterface with Docker/Podman backends
+  Uses builder pattern for command construction
+```
+
+<Tip>
+Use advanced mode when you need to understand dependencies and architectural patterns.
+</Tip>
+
+## JSON Output for Agents
+
+Perfect for AI agents that need structured data:
+
+```bash
+vg context summarize code . --output json --max 10
+```
+
+**Example output:**
+```json
+{
+  "mode": "code",
+  "path": ".",
+  "fileCount": 45,
+  "files": [
+    {
+      "path": "cmd/root.go",
+      "summary": [
+        "CLI entry point, subcommand routing",
+        "Defines root command with validate, exec, session subcommands",
+        "Initializes config and logger",
+        "Handles version flag",
+        "Sets up signal handling for graceful shutdown"
+      ]
+    },
+    {
+      "path": "internal/sandbox/sandbox.go",
+      "summary": [
+        "Execution mode decision logic",
+        "Determines if command should run in sandbox",
+        "Implements Docker, Podman, and namespace runtimes"
+      ]
+    }
+  ]
+}
+```
+
+<Info>
+JSON output includes `fileCount` for tracking and `files` array with path + summary for each file.
+</Info>
+
+## Filter Changed Files
+
+Only process files changed since a commit or date - perfect for PR reviews:
+
+### Since Commit
+
+```bash
+vg context summarize code . --since HEAD~1
+```
+
+Summarizes only files changed in the last commit.
+
+### Since Date
+
+```bash
+vg context summarize code . --since 2024-01-01
+```
+
+Summarizes files changed since January 1, 2024.
+
+### Since Commit Hash
+
+```bash
+vg context summarize code . --since abc123def
+```
+
+Summarizes files changed since commit `abc123def`.
+
+<Steps>
+  <Step title="Git detects changed files">
+    Uses `git diff --name-only` to find changed files.
+  </Step>
+  
+  <Step title="Only changed files are processed">
+    Skips unchanged files for faster processing.
+  </Step>
+  
+  <Step title="Cache is still used">
+    If a changed file was previously cached, cache is used.
+  </Step>
+</Steps>
+
+## Caching Behavior
+
+Summaries are automatically cached for faster subsequent runs.
+
+### Cache Location
+
+**Repo-local cache (preferred):**
+```
+.vectra-guard/cache/context-summaries/
+```
+
+**Global cache (fallback):**
+```
+~/.vectra-guard/cache/context-summaries/
+```
+
+<Note>
+Run `vg init --local` to set up repo-local caching. This is much faster for team collaboration.
+</Note>
+
+### How Caching Works
+
+<Steps>
+  <Step title="First run: Compute and cache">
+    ```bash
+    vg context summarize code . --max 5
+    # Analyzes all files, caches results
+    # Time: 5-10 seconds for 50 files
+    ```
+  </Step>
+  
+  <Step title="Subsequent runs: Load from cache">
+    ```bash
+    vg context summarize code . --max 5
+    # Loads from cache
+    # Time: <1 second ⚡
+    ```
+  </Step>
+  
+  <Step title="Changed files: Re-compute only changed">
+    ```bash
+    vg context summarize code . --since HEAD~1
+    # Re-computes only changed files
+    # Uses cache for unchanged files
+    # Time: <2 seconds ⚡
+    ```
+  </Step>
+</Steps>
+
+### Cache Keys
+
+Cache keys are SHA-256 hashes of:
+```
+filePath + ":" + mode
+```
+
+This ensures:
+- Unique cache per file and mode
+- Different modes don't conflict
+- Fast lookup by hash
+
+## Use Cases
+
+### Onboarding New Developers
+
+```bash
+# Get overview of codebase
+vg context summarize code . --max 5 > CODEBASE_OVERVIEW.txt
+
+# Share with new team members
+cat CODEBASE_OVERVIEW.txt
+```
+
+### AI Agent Context
+
+Give agents structured context about your project:
+
+```bash
+# Generate JSON for agent
+vg context summarize code . --output json --max 10 > context.json
+
+# Agent reads context.json to understand codebase structure
+```
+
+### PR Review Workflow
+
+```bash
+# Summarize only changed files
+vg context summarize code . --since main
+
+# Review what changed
+```
+
+<Tip>
+Use `--since main` to see summaries of all files changed in your feature branch.
+</Tip>
+
+### Documentation Updates
+
+```bash
+# Check which docs changed recently
+vg context summarize docs . --since "2024-01-01" --max 3
+
+# Ensure docs are up to date
+```
+
+## Configuration
+
+Control max items globally in `config.yaml`:
+
+```yaml
+context:
+  max_items: 5  # Default max items per file
+  cache_enabled: true  # Enable caching
+```
+
+## Supported File Types
+
+### Code Mode
+
+- `.go`, `.js`, `.ts`, `.py`, `.java`, `.cpp`, `.c`, `.h`, `.rs`, `.rb`, `.php`, `.swift`, `.kt`, `.scala`
+- `.sh`, `.bash`, `.zsh`, `.fish`
+- `Makefile`, `Dockerfile`
+
+### Docs Mode
+
+- `.md`, `.txt`, `.rst`, `.adoc`, `.org`, `.tex`
+- `README`, `LICENSE`, `CHANGELOG` (any extension)
+
+### Advanced Mode
+
+Same as code mode, with deeper analysis.
+
+## Examples
+
+### Basic Usage
+
+```bash
+# Summarize single file
+vg context summarize code cmd/root.go --max 5
+
+# Summarize entire repo
+vg context summarize code . --max 5
+
+# Summarize docs
+vg context summarize docs . --max 3
+
+# Deep analysis
+vg context summarize advanced internal/ --max 3
+```
+
+### JSON for Agents
+
+```bash
+# Full repo context
+vg context summarize code . --output json --max 10 > context.json
+
+# Changed files only
+vg context summarize code . --output json --since HEAD~1 > changes.json
+```
+
+### PR Review
+
+```bash
+# What changed in this PR?
+vg context summarize code . --since main
+
+# JSON for automated review
+vg context summarize code . --output json --since main > pr-summary.json
+```
+
+## Performance
+
+| Files | First Run | Cached Run | With --since |
+|-------|-----------|------------|--------------|
+| 10    | 1-2s      | &lt;0.5s      | &lt;0.5s        |
+| 50    | 5-10s     | &lt;1s        | 1-2s         |
+| 200   | 20-30s    | &lt;2s        | 2-5s         |
+| 500   | 60-90s    | &lt;5s        | 5-10s        |
+
+<Note>
+Caching makes repeated runs 10-20x faster!
+</Note>
+
+## Related Features
+
+- [Trust Store](/advanced/trust-store) - Manage trusted commands
+- [Roadmap Planning](/advanced/roadmap-planning) - Plan agent tasks
+- [Metrics](/advanced/metrics) - Track execution stats

@@ -1,0 +1,89 @@
+---
+title: "vg validate"
+description: "Validate shell scripts for security issues without executing them"
+---
+
+## Syntax
+
+```bash
+vectra-guard validate <script-path>
+vg validate <script-path>
+```
+
+## Description
+
+Analyze shell scripts for security risks without executing them. This is a safe pre-check that scans scripts for dangerous patterns, risky commands, and policy violations using the same analyzer that powers `vg exec`.
+
+## Arguments
+
+<ParamField path="script-path" type="string" required>
+  Path to the shell script to validate. Can be any script file (.sh, .bash, etc.)
+</ParamField>
+
+## Exit Codes
+
+- **0**: Script is clean (no violations found)
+- **2**: Security violations detected in the script
+
+## Examples
+
+### Validate a deployment script
+
+```bash
+vg validate scripts/deploy.sh
+# Output:
+# ✅ No violations detected
+```
+
+### Script with violations
+
+```bash
+vg validate risky-script.sh
+# Output (JSON format):
+# {
+#   "level": "warn",
+#   "path": "risky-script.sh",
+#   "line": 12,
+#   "code": "DANGEROUS_DELETE_ROOT",
+#   "severity": "critical",
+#   "description": "Attempts to delete root directory",
+#   "recommendation": "Remove or restrict this command. Use specific paths instead."
+# }
+```
+
+### Validate before CI deployment
+
+```bash
+#!/bin/bash
+for script in scripts/*.sh; do
+  if ! vg validate "$script"; then
+    echo "❌ Validation failed for $script"
+    exit 1
+  fi
+done
+echo "✅ All scripts validated"
+```
+
+### Validate with JSON output
+
+```bash
+vg --output json validate setup.sh
+# Returns structured JSON with all findings
+```
+
+## What It Detects
+
+The validator checks for:
+
+- **Critical dangers**: `rm -rf /`, `rm -rf ~`, `mkfs`, `dd if=`
+- **Dangerous deletions**: Attempts to delete system or protected directories
+- **Fork bombs**: `:(){:|:&};:` and similar patterns
+- **Risky network commands**: `curl | sh`, `wget | bash`
+- **Environment access**: Reading `.env` files, accessing `$AWS_SECRET_ACCESS_KEY`
+- **Subprocess risks**: `eval`, `exec`, shell=True in Python
+- **External HTTP**: Non-localhost URLs that could be SSRF risks
+
+## Related Commands
+
+- [exec](/cli/exec) - Execute commands with protection
+- [scan-security](/cli/scan-security) - Scan source code for security issues

@@ -1,0 +1,100 @@
+---
+title: "vg exec"
+description: "Execute commands with security validation and optional sandboxing"
+---
+
+## Syntax
+
+```bash
+vectra-guard exec [OPTIONS] -- <command> [args...]
+vg exec [OPTIONS] -- <command> [args...]
+```
+
+## Description
+
+Execute commands with comprehensive security validation. Commands are analyzed for risks before execution, and risky commands may be sandboxed automatically. Critical commands like `rm -rf /` are always blocked.
+
+## Options
+
+<ParamField path="--interactive" type="boolean" default="false">
+  Prompt for approval on risky commands instead of blocking automatically. Allows you to review security concerns and approve or deny execution interactively.
+</ParamField>
+
+<ParamField path="--session" type="string">
+  Track execution in the specified session ID. All commands and their results will be recorded in the session for audit purposes.
+</ParamField>
+
+## How It Works
+
+1. **Analysis**: All commands are analyzed for security risks using 200+ patterns
+2. **Critical Protection**: Commands like `rm -rf /`, `mkfs`, `dd if=` are always blocked
+3. **Guard Level Filtering**: Findings are filtered based on your configured guard level (off, low, medium, high, paranoid)
+4. **Repeat Protection**: Prevents rapid loops of destructive commands
+5. **Sandbox Decision**: Risky commands may be sandboxed based on configuration
+6. **Execution**: Safe commands run on host, risky ones in sandbox with caching
+
+## Exit Codes
+
+- **0**: Command executed successfully
+- **1**: Execution error or command not found
+- **2**: Security violation detected
+- **3**: Command blocked (critical risk, lockdown, or guard level)
+- **Other**: Exit code from the executed command
+
+## Examples
+
+### Basic execution
+
+```bash
+vg exec -- npm install
+# Analyzes npm install, runs in sandbox if risky dependencies detected
+```
+
+### Interactive approval for risky commands
+
+```bash
+vg exec --interactive -- curl https://example.com/script.sh | sh
+# Prompts:
+# ⚠️  Command requires approval
+# Risk Level: HIGH
+# Options: y (run once), r (remember), n (cancel)
+```
+
+### Track in a session
+
+```bash
+SESSION=$(vg session start --agent "manual")
+vg exec --session $SESSION -- npm test
+vg exec --session $SESSION -- git push
+vg session show $SESSION
+```
+
+### Soft delete with automatic backup
+
+```bash
+vg exec -- rm -rf node_modules
+# ♻️  Files moved to backup (ID: backup-1234567890)
+#    Restore with: vg restore backup-1234567890
+```
+
+### Bypass for non-critical commands
+
+```bash
+export VECTRAGUARD_BYPASS="i-am-human-$(whoami)"
+vg exec -- npm run build
+# Executes without sandbox (only for non-critical commands)
+```
+
+## Environment Variables
+
+- `VECTRAGUARD_SESSION_ID`: Auto-track commands in this session
+- `VECTRAGUARD_BYPASS`: Allow bypass for non-critical commands (requires 10+ char value)
+- `VECTRAGUARD_ALLOW_NET=1`: Allow external HTTP(S) endpoints
+- `VECTRAGUARD_ALLOW_SUDO=1`: Allow sudo usage
+
+## Related Commands
+
+- [validate](/cli/validate) - Validate scripts without executing
+- [session](/cli/session) - Manage execution sessions
+- [audit](/cli/audit) - Audit execution history
+- [trust](/cli/trust) - Manage trusted commands

@@ -1,0 +1,201 @@
+---
+title: "vg audit"
+description: "Audit security across sessions, packages, and repositories"
+---
+
+## Syntax
+
+```bash
+vectra-guard audit <tool> [options]
+vg audit <tool> [options]
+```
+
+## Subcommands
+
+### audit session
+
+Audit execution activity within sessions.
+
+```bash
+vg audit session [--session <id>] [--all]
+```
+
+<ParamField path="--session" type="string">
+  Specific session ID to audit. If not provided, uses the current workspace session.
+</ParamField>
+
+<ParamField path="--all" type="boolean" default="false">
+  Audit across all sessions in the workspace instead of a single session.
+</ParamField>
+
+**Output**: Summary of commands by risk level, execution mode (host vs sandbox), bypassed commands, and blocked attempts.
+
+### audit repo
+
+Comprehensive repository-wide security audit combining code scanning, secret detection, and package audits.
+
+```bash
+vg audit repo [--path <dir>] [--output <format>] [--allowlist <file>] [--ignore <globs>] [--fail] [--no-install]
+```
+
+<ParamField path="--path" type="string" default=".">
+  Target directory for repository audit
+</ParamField>
+
+<ParamField path="--output" type="string" default="text">
+  Report format: `text`, `markdown`, or `json`
+</ParamField>
+
+<ParamField path="--allowlist" type="string">
+  Path to allowlist file for known-safe secrets
+</ParamField>
+
+<ParamField path="--ignore" type="string">
+  Comma-separated path globs to ignore in secret scan (e.g., "vendor/**,*.test.js")
+</ParamField>
+
+<ParamField path="--fail" type="boolean" default="false">
+  Exit with code 2 if any findings are detected (useful for CI/CD)
+</ParamField>
+
+<ParamField path="--no-install" type="boolean" default="false">
+  Disable auto-installation of audit dependencies (npm, pip-audit)
+</ParamField>
+
+**What it checks**:
+- Static security scan (scan-security)
+- Secret detection (scan-secrets)
+- npm vulnerabilities (if package.json exists)
+- Python vulnerabilities (if requirements.txt exists)
+
+### audit npm
+
+Audit npm package vulnerabilities using `npm audit`.
+
+```bash
+vg audit npm [--path <dir>] [--fail] [--no-install]
+```
+
+<ParamField path="--path" type="string" default=".">
+  Target directory containing package.json
+</ParamField>
+
+<ParamField path="--fail" type="boolean" default="false">
+  Exit with code 2 if vulnerabilities are found
+</ParamField>
+
+<ParamField path="--no-install" type="boolean" default="false">
+  Don't auto-install npm if missing
+</ParamField>
+
+### audit python
+
+Audit Python package vulnerabilities using `pip-audit`.
+
+```bash
+vg audit python [--path <dir>] [--fail] [--no-install]
+```
+
+<ParamField path="--path" type="string" default=".">
+  Target directory. Uses requirements.txt if present, otherwise scans environment.
+</ParamField>
+
+<ParamField path="--fail" type="boolean" default="false">
+  Exit with code 2 if vulnerabilities are found
+</ParamField>
+
+<ParamField path="--no-install" type="boolean" default="false">
+  Don't auto-install pip-audit if missing
+</ParamField>
+
+## Exit Codes
+
+- **0**: Audit completed successfully (no findings if --fail was used)
+- **1**: Audit failed due to error
+- **2**: Findings detected (only when --fail is specified)
+
+## Examples
+
+### Audit current session
+
+```bash
+vg audit session
+# Output:
+# Session audit summary:
+#   Session ID: session-abc123
+#   Total commands: 15
+#   Risk breakdown:
+#     - low: 12
+#     - medium: 2
+#     - high: 1
+#   Execution:
+#     - host: 10
+#     - sandbox: 5
+#   Bypassed: 0
+#   Blocked: 1
+```
+
+### Audit all sessions
+
+```bash
+vg audit session --all
+# Aggregates statistics across all workspace sessions
+```
+
+### Full repository audit
+
+```bash
+vg audit repo --output markdown > security-report.md
+# Generates markdown report with:
+# - Code security findings
+# - Detected secrets
+# - npm vulnerabilities
+# - Python vulnerabilities
+```
+
+### CI/CD integration
+
+```bash
+#!/bin/bash
+# Fail build if security issues found
+vg audit repo --fail --output json > audit-report.json
+if [ $? -ne 0 ]; then
+  echo "Security audit failed!"
+  cat audit-report.json
+  exit 1
+fi
+```
+
+### Audit with secret allowlist
+
+```bash
+# .vg-allowlist
+# test-api-key-12345
+# mock-secret-for-tests
+
+vg audit repo --allowlist .vg-allowlist --ignore "**/*.test.js,vendor/**"
+```
+
+### Package-specific audits
+
+```bash
+# npm only
+vg audit npm --fail
+
+# Python only
+vg audit python --path ./api --fail
+```
+
+### JSON output for automation
+
+```bash
+vg audit repo --output json | jq '.code_findings[] | select(.severity=="critical")'
+# Extract only critical code findings
+```
+
+## Related Commands
+
+- [session](/cli/session) - Manage sessions
+- [scan-secrets](/cli/scan-secrets) - Dedicated secret scanning
+- [scan-security](/cli/scan-security) - Dedicated code security scanning
+- [cve](/cli/cve) - CVE-aware dependency scanning

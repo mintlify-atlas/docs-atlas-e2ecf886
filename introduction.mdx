@@ -1,0 +1,138 @@
+---
+title: Introduction
+description: Security guard for AI coding agents and development workflows
+---
+
+# Welcome to Vectra Guard
+
+Vectra Guard adds a safety layer to your development environment. AI agents and automation run with your full shell access—one mistaken command can wipe a repo, delete system files, or push risky changes. Vectra Guard checks every command, isolates risky execution in a sandbox, and keeps a clear audit trail.
+
+## Why Vectra Guard?
+
+AI agents and automation run with your full shell access. One mistaken command can wipe a repo, delete system files, or push risky changes. Vectra Guard adds a safety layer that checks every command, isolates risky execution in a sandbox, and keeps a clear audit trail.
+
+<CardGroup cols={2}>
+  <Card title="Safety by default" icon="shield-check">
+    Risky commands are analyzed before they run. Dangerous operations blocked automatically.
+  </Card>
+  
+  <Card title="CVE scanning" icon="bug">
+    Local cache and manifest scanning for known vulnerable dependencies.
+  </Card>
+  
+  <Card title="Non-invasive install" icon="download">
+    User-space by default with a one-line install and easy uninstall.
+  </Card>
+  
+  <Card title="Sandbox + cache" icon="box">
+    Isolate unknown code and reuse cached dependencies for 10x faster installs.
+  </Card>
+  
+  <Card title="Auditability" icon="list-check">
+    Review what ran, what was blocked, and why with complete session logs.
+  </Card>
+  
+  <Card title="Agent confidence" icon="robot">
+    Clear guardrails for agentic workflows without disrupting normal shells.
+  </Card>
+</CardGroup>
+
+## What it protects against
+
+Vectra Guard automatically detects and blocks 200+ risky patterns across 30+ system directories:
+
+- **Root or system deletion** — `rm -rf /`, `rm -rf /etc`
+- **Dangerous operations** — `mkfs`, `dd if=`
+- **Risky git actions** — force push, history rewrites
+- **Networked installs** — `curl | sh`, `wget | bash`
+- **Known vulnerable dependencies** — via CVE scanning
+- **Exposed secrets and risky code patterns** — `vg scan-secrets`, `vg scan-security`
+- **External HTTP(S) endpoints** — when using `vg`/`vectra-guard` (localhost only by default)
+- **Sudo usage** — when using `vg`/`vectra-guard` (override with `VECTRAGUARD_ALLOW_SUDO=1`)
+
+<Note>
+  Vectra Guard protects 30+ system directories across macOS, Linux, and Windows, and detects 200+ risky patterns automatically.
+</Note>
+
+## Platform support
+
+Vectra Guard works on all major platforms:
+
+- **macOS** — x86_64, arm64 (Apple Silicon)
+- **Linux** — x86_64, arm64
+- **Windows** — x86_64, arm64
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get to your first successful command execution in under 5 minutes
+  </Card>
+  
+  <Card title="Installation" icon="download" href="/installation">
+    Install Vectra Guard on macOS, Linux, or Windows
+  </Card>
+</CardGroup>
+
+## Key features
+
+### Execution protection
+
+Sandbox risky commands and block dangerous ones. Optional interactive approval for medium-risk actions.
+
+```bash
+vectra-guard exec -- npm install
+```
+
+### Script validation
+
+Analyze scripts for security risks **without executing** — safe pre-check before you run anything.
+
+```bash
+vectra-guard validate scripts/deploy.sh
+```
+
+### Session and audit
+
+Traceability: what ran, what was blocked, session IDs and audit logs.
+
+```bash
+SESSION=$(vectra-guard session start --agent "manual")
+export VECTRAGUARD_SESSION_ID=$SESSION
+vectra-guard exec -- npm install
+vectra-guard audit session
+```
+
+### CVE scanning
+
+Flag vulnerable dependencies before install. Sync a local CVE cache and scan manifests/lockfiles.
+
+```bash
+vectra-guard cve sync --path .
+vectra-guard cve scan --path .
+```
+
+### Secret and code scanning
+
+Predetect before deploy: find exposed secrets and risky code patterns.
+
+```bash
+vectra-guard scan-secrets --path .
+vectra-guard scan-security --path . --languages go,python,c,config
+```
+
+## Next steps
+
+<CardGroup cols={3}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Run your first protected command
+  </Card>
+  
+  <Card title="Installation" icon="download" href="/installation">
+    Detailed installation guide
+  </Card>
+  
+  <Card title="Configuration" icon="sliders" href="/configuration">
+    Configure policies and settings
+  </Card>
+</CardGroup>

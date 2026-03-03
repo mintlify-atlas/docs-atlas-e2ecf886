@@ -1,0 +1,510 @@
+---
+title: "AI Agent Integration"
+description: "Integrate Vectra Guard with AI coding agents like Cursor, Claude, and OpenClaw"
+---
+
+# AI Agent Integration
+
+Vectra Guard provides first-class integration with AI coding agents, ensuring they operate safely within your development environment.
+
+## Quick Start: Seed Agent Instructions
+
+The `seed agents` command automatically creates instruction files for AI agents:
+
+```bash
+# Seed instructions for common agents
+vg seed agents --target . --targets "agents,cursor,claude"
+
+# Seed OpenClaw plugin configuration
+vg seed agents --target . --targets "openclaw"
+
+# Seed everything at once
+vg seed agents --target . --targets "agents,claude,cursor,openclaw,copilot"
+```
+
+---
+
+## Supported AI Agents
+
+<Tabs>
+  <Tab title="Cursor">
+    ### Cursor IDE Integration
+
+    Cursor is automatically protected when you install the shell tracker:
+
+    ```bash
+    # Install shell tracker
+    ./scripts/install-shell-tracker.sh
+
+    # Seed Cursor-specific instructions
+    vg seed agents --target . --targets "cursor"
+    ```
+
+    **What gets created:**
+    - `.cursor/rules/vectra-guard.md` - Agent instructions
+    - VSCode tasks for protected commands
+
+    **Agent workflow:**
+    ```markdown
+    # Cursor Agent Instructions (from seeded file)
+    
+    ## CVE Scanning
+    Before installing packages:
+    1. Run: vg cve sync --path .
+    2. Run: vg cve scan --path .
+    3. Review vulnerabilities
+    4. Install: vg exec -- npm install
+    
+    ## Session Management
+    - Use $VECTRAGUARD_SESSION_ID for all commands
+    - Log operations with vg session record
+    ```
+  </Tab>
+
+  <Tab title="Claude / Copilot">
+    ### Claude Desktop & GitHub Copilot
+
+    Seed instructions for Claude and Copilot:
+
+    ```bash
+    vg seed agents --target . --targets "claude,copilot"
+    ```
+
+    **What gets created:**
+    - `AGENTS.md` - General agent instructions
+    - `.github/copilot-instructions.md` - Copilot-specific
+
+    **Agent workflow example:**
+    ```markdown
+    # Before Package Installation
+    1. Sync CVE database: vg cve sync --path .
+    2. Scan for vulnerabilities: vg cve scan --path .
+    3. If no critical CVEs, proceed: vg exec -- npm install
+    
+    # For Risky Operations
+    - Validate scripts before running: vg validate script.sh
+    - Use interactive mode: vg exec --interactive -- sudo command
+    - Trust safe commands: vg trust add "npm test"
+    ```
+  </Tab>
+
+  <Tab title="OpenClaw">
+    ### OpenClaw Plugin
+
+    VectraGuard integrates as a first-class OpenClaw plugin with runtime security:
+
+    ```bash
+    # 1. Seed the plugin config
+    vg seed agents --target . --targets "openclaw"
+    
+    # 2. Install the OpenClaw plugin
+    pnpm add @openclaw/vectraguard
+    
+    # 3. Config is already created (auto-detected state directory)
+    # Edit .openclaw/AGENTS.md or ~/Library/Application Support/openclaw/AGENTS.md
+    ```
+
+    **Plugin features:**
+    
+    | Feature | Hook/Tool | Description |
+    |---------|-----------|-------------|
+    | **Command gate** | `before_tool_call` | Blocks dangerous shell commands |
+    | **Prompt firewall** | `llm_input` | Detects prompt injection (observe) |
+    | **CVE scanning** | `vectraguard_cve_scan` | Agent can check vulnerabilities |
+    | **Secret detection** | `vectraguard_secret_scan` | Finds exposed secrets |
+    | **Audit trail** | `after_tool_call` | Logs all shell executions |
+    | **CVE sync** | Background service | Keeps database updated |
+
+    **Gateway RPC methods:**
+    ```bash
+    # Check plugin status
+    vectraguard.status
+    
+    # Run scans
+    vectraguard.scan --type cve --path .
+    vectraguard.scan --type secrets --path .
+    
+    # Seed agent files
+    vectraguard.seed --list
+    vectraguard.seed --targets agents,cursor
+    
+    # View configuration
+    vectraguard.config
+    ```
+
+    **How command gate works:**
+    ```
+    Agent: rm -rf /important-data
+      → VectraGuard analyzes: CRITICAL RISK
+      → Plugin returns: { block: true, blockReason: "..." }
+      → Command never executes ✅
+    
+    Agent: npm install express
+      → VectraGuard analyzes: LOW RISK
+      → Plugin allows through
+      → OpenClaw's exec approval runs
+      → Command executes safely ✅
+    ```
+  </Tab>
+
+  <Tab title="Windsurf / Codex">
+    ### Windsurf & OpenAI Codex
+
+    ```bash
+    vg seed agents --target . --targets "windsurf,codex"
+    ```
+
+    **What gets created:**
+    - General `AGENTS.md` with security workflows
+    - Agent-specific instruction templates
+
+    These agents follow the same security patterns as Claude/Copilot.
+  </Tab>
+</Tabs>
+
+---
+
+## Seed Agents Command Reference
+
+### List Available Targets
+
+```bash
+vg seed agents --list
+
+# Output:
+# Available targets:
+#   agents       -> AGENTS.md
+#   claude       -> AGENTS.md
+#   codex        -> AGENTS.md
+#   copilot      -> .github/copilot-instructions.md
+#   cursor       -> .cursor/rules/vectra-guard.md
+#   openclaw     -> .openclaw/AGENTS.md (or ~/Library/Application Support/openclaw/)
+#   vscode       -> .vscode/vectra-guard.md
+#   windsurf     -> AGENTS.md
+```
+
+### Seed Multiple Targets
+
+<CodeGroup>
+  ```bash All Agents
+  vg seed agents --target . --targets "agents,claude,cursor,openclaw,copilot"
+  ```
+
+  ```bash Cursor + OpenClaw
+  vg seed agents --target . --targets "cursor,openclaw"
+  ```
+
+  ```bash Just General Instructions
+  vg seed agents --target . --targets "agents"
+  ```
+
+  ```bash Auto-Confirm (CI/CD)
+  vg seed agents --target . --targets "agents" --yes
+  ```
+</CodeGroup>
+
+### OpenClaw Auto-Detection
+
+The `seed agents` command automatically detects your OpenClaw installation:
+
+```bash
+vg seed agents --targets "openclaw"
+
+# Auto-detects:
+# - $OPENCLAW_STATE_DIR (environment variable)
+# - ~/Library/Application Support/openclaw (macOS default)
+# - ~/.config/openclaw (Linux default)
+# - ~/.openclaw (legacy fallback)
+# - .openclaw/ (current directory fallback)
+
+# Interactive confirmation:
+#   OpenClaw detected (environment variable OPENCLAW_STATE_DIR)
+#   State directory: /custom/path/openclaw
+#   
+#   Destination: /custom/path/openclaw/AGENTS.md
+#   Confirm? [Y/n/custom path]:
+```
+
+---
+
+## Agent Instruction Templates
+
+### CVE Scanning Workflow
+
+All seeded agent files include this workflow:
+
+```markdown
+## CVE Scanning Workflow
+
+### Before Installing Dependencies
+
+1. **Sync CVE Database**
+   ```bash
+   vg cve sync --path .
+   ```
+
+2. **Scan for Vulnerabilities**
+   ```bash
+   vg cve scan --path .
+   ```
+
+3. **Review Results**
+   - If no critical CVEs: proceed with installation
+   - If critical CVEs: consider alternatives or upgrades
+
+4. **Protected Installation**
+   ```bash
+   vg exec -- npm install
+   ```
+
+### Explain Specific Packages
+
+```bash
+vg cve explain lodash@4.17.20 --ecosystem npm
+```
+```
+
+### Session Management
+
+```markdown
+## Session Management for Agents
+
+### Start Session
+
+```bash
+SESSION=$(vg session start --agent "cursor-ai" --workspace .)
+export VECTRAGUARD_SESSION_ID=$SESSION
+```
+
+### Track Operations
+
+All commands are automatically tracked when using the shell tracker.
+
+### Review Activity
+
+```bash
+vg session show $VECTRAGUARD_SESSION_ID
+vg session list
+```
+```
+
+### Trust Store Usage
+
+```markdown
+## Trust Store for Repeated Commands
+
+### Trust Safe Commands
+
+```bash
+# Trust a command permanently
+vg trust add "npm test" --note "Test suite"
+
+# Trust with expiration
+vg trust add "npm run build" --duration "7d"
+```
+
+### List Trusted
+
+```bash
+vg trust list
+```
+
+### Remove Trust
+
+```bash
+vg trust remove "npm test"
+```
+```
+
+---
+
+## Complete Workflow Example
+
+Here's a complete agent workflow from seeded instructions:
+
+### Step 1: Initialize Project Security
+
+Set up your security environment:
+
+```bash
+# Start session
+SESSION=$(vg session start --agent "cursor-ai")
+export VECTRAGUARD_SESSION_ID=$SESSION
+
+# Initialize local config
+vg init --local
+
+# Sync CVE database
+vg cve sync --path .
+```
+
+### Step 2: Check Dependencies for Vulnerabilities
+
+Scan for known vulnerabilities:
+
+```bash
+# Scan manifests
+vg cve scan --path .
+
+# Explain specific packages if needed
+vg cve explain express@4.17.1 --ecosystem npm
+```
+
+### Step 3: Install Dependencies Safely
+
+Use protected execution for installations:
+
+```bash
+# Protected installation
+vg exec -- npm install
+
+# Trust common commands for faster workflow
+vg trust add "npm test"
+vg trust add "npm run dev"
+```
+
+### Step 4: Validate Scripts Before Running
+
+Always validate scripts before execution:
+
+```bash
+# Validate deployment script
+vg validate scripts/deploy.sh
+
+# Explain risks if validation fails
+vg explain scripts/deploy.sh
+
+# Run with interactive approval
+vg exec --interactive -- ./scripts/deploy.sh
+```
+
+### Step 5: Review Session Activity
+
+Check what happened during the session:
+
+```bash
+# View all operations
+vg session show $SESSION
+
+# Export for audit
+vg session show $SESSION --output json > audit.json
+```
+
+---
+
+## Seed Output Example
+
+When you run `vg seed agents`, you get detailed output:
+
+```bash
+vg seed agents --target . --targets "agents,cursor,openclaw"
+
+============================================================
+  VECTRA GUARD — Seed Agent Instructions
+============================================================
+
+  Repository:  vectra-guard
+  Branch:      main
+  Workspace:   /home/user/projects/vectra-guard
+  Project:     go
+
+  Seed Results:
+  --------------------------------------------------
+    [+] ./AGENTS.md                                  2.4 KB
+    [+] ./.cursor/rules/vectra-guard.md              1.8 KB
+    [+] ~/.openclaw/AGENTS.md                        2.4 KB (merged)
+
+  Agent Coverage:
+  --------------------------------------------------
+    [*] agents     AGENTS.md                        (just now, 2.4 KB)  NEW
+    [ ] claude     AGENTS.md                        (not seeded)
+    [*] cursor     .cursor/rules/vectra-guard.md    (just now, 1.8 KB)  NEW
+    [*] openclaw   .openclaw/AGENTS.md              (just now, 2.4 KB)  NEW
+    [ ] copilot    .github/copilot-instructions.md  (not seeded)
+
+  Coverage: 3/5 agents configured
+
+  VectraGuard Protection:
+  --------------------------------------------------
+    Guard Level:    auto (context-aware)
+    Sandbox:        ENABLED (mode: always)
+    CVE Scanner:    ENABLED
+    Soft Delete:    ENABLED
+    Env Protection: ENABLED (masking: partial)
+    Git Ops Guard:  ENABLED
+
+    Config: .vectra-guard/config.yaml
+
+  --------------------------------------------------
+  Tip: `vg seed agents --targets agents,cursor,copilot` to add more
+  Tip: `vg serve` to open the security dashboard
+============================================================
+```
+
+---
+
+## Best Practices
+
+### For Agent Instructions
+
+1. **Always sync CVE database first**
+   ```bash
+   vg cve sync --path .
+   ```
+
+2. **Scan before installing**
+   ```bash
+   vg cve scan --path .
+   ```
+
+3. **Use sessions for tracking**
+   ```bash
+   export VECTRAGUARD_SESSION_ID=$(vg session start --agent "my-agent")
+   ```
+
+4. **Trust common, safe commands**
+   ```bash
+   vg trust add "npm test"
+   vg trust add "git status"
+   ```
+
+5. **Validate scripts before execution**
+   ```bash
+   vg validate script.sh
+   vg exec -- ./script.sh
+   ```
+
+### For OpenClaw Integration
+
+1. **Let the plugin handle command gating**
+   - The plugin automatically blocks dangerous commands
+   - No need for manual `vg exec` wrapping
+
+2. **Use the CVE scan tool**
+   ```javascript
+   // Agent can call this tool
+   await agent.callTool('vectraguard_cve_scan', { path: '.' })
+   ```
+
+3. **Review audit logs**
+   - All shell executions are logged via `after_tool_call` hook
+   - Check logs regularly for suspicious activity
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="IDE Integration" icon="code" href="/integrations/ide-integration">
+    Set up VSCode and Cursor tasks
+  </Card>
+  <Card title="CI/CD Integration" icon="circle-check" href="/integrations/ci-cd">
+    Add security to your pipelines
+  </Card>
+  <Card title="Git Hooks" icon="code-branch" href="/integrations/git-hooks">
+    Validate scripts before commit
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Customize agent protection settings
+  </Card>
+</CardGroup>

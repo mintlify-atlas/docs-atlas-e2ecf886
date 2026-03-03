@@ -1,0 +1,579 @@
+---
+title: "Git Hooks Integration"
+description: "Validate scripts and enforce security policies with Git pre-commit and pre-push hooks"
+---
+
+# Git Hooks Integration
+
+Vectra Guard integrates with Git hooks to validate scripts and enforce security policies before commits and pushes.
+
+## Quick Start
+
+Add a pre-commit hook to validate scripts:
+
+```bash
+# Create the hook
+cat > .git/hooks/pre-commit << 'EOF'
+#!/bin/bash
+vectra-guard validate $(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(sh|bash)$')
+EOF
+
+chmod +x .git/hooks/pre-commit
+```
+
+---
+
+## Pre-Commit Hook
+
+### Complete Pre-Commit Hook
+
+This is the recommended pre-commit hook from the README:
+
+<Steps>
+  <Step title="Create the Hook File">
+    ```bash
+    # Create .git/hooks/pre-commit
+    touch .git/hooks/pre-commit
+    chmod +x .git/hooks/pre-commit
+    ```
+  </Step>
+
+  <Step title="Add Validation Script">
+    ```bash .git/hooks/pre-commit
+    #!/bin/bash
+    # Vectra Guard Pre-commit Hook
+    
+    SCRIPTS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(sh|bash)$')
+    
+    if [ -n "$SCRIPTS" ]; then
+        echo "🛡️  Vectra Guard: Validating scripts..."
+        for script in $SCRIPTS; do
+            if ! vectra-guard validate "$script"; then
+                echo "❌ Security issues found in: $script"
+                echo "   Run: vectra-guard explain $script"
+                exit 1
+            fi
+        done
+        echo "✅ All scripts validated"
+    fi
+    ```
+  </Step>
+
+  <Step title="Test the Hook">
+    ```bash
+    # Create a test script
+    echo '#!/bin/bash' > test.sh
+    echo 'rm -rf /' >> test.sh
+    
+    # Try to commit (should fail)
+    git add test.sh
+    git commit -m "test"
+    
+    # Should output:
+    # ❌ Security issues found in: test.sh
+    #    Run: vectra-guard explain test.sh
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Enhanced Pre-Commit Hooks
+
+### Multi-Check Pre-Commit
+
+<Tabs>
+  <Tab title="Complete Validation">
+    ```bash .git/hooks/pre-commit
+    #!/bin/bash
+    # Vectra Guard Pre-commit Hook - Complete Validation
+    
+    set -e
+    
+    echo "🛡️  Vectra Guard: Running pre-commit checks..."
+    echo ""
+    
+    # 1. Validate shell scripts
+    SCRIPTS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(sh|bash)$')
+    
+    if [ -n "$SCRIPTS" ]; then
+        echo "📝 Validating shell scripts..."
+        for script in $SCRIPTS; do
+            if [ -f "$script" ]; then
+                echo "   Checking: $script"
+                if ! vectra-guard validate "$script"; then
+                    echo ""
+                    echo "❌ Security issues found in: $script"
+                    echo ""
+                    echo "To see details, run:"
+                    echo "  vectra-guard explain $script"
+                    echo ""
+                    echo "Fix issues or use 'git commit --no-verify' to bypass (not recommended)"
+                    exit 1
+                fi
+            fi
+        done
+        echo "   ✅ All scripts validated"
+        echo ""
+    fi
+    
+    # 2. Check Dockerfile if present
+    if git diff --cached --name-only | grep -q "Dockerfile"; then
+        echo "🐳 Checking Dockerfile..."
+        if ! vectra-guard validate Dockerfile 2>/dev/null; then
+            echo "   ⚠️  Warning: Dockerfile may contain risky patterns"
+        else
+            echo "   ✅ Dockerfile validated"
+        fi
+        echo ""
+    fi
+    
+    # 3. Scan for secrets
+    echo "🔍 Scanning for exposed secrets..."
+    STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+    if [ -n "$STAGED_FILES" ]; then
+        # Create temp dir with staged files
+        TEMP_DIR=$(mktemp -d)
+        trap "rm -rf $TEMP_DIR" EXIT
+        
+        for file in $STAGED_FILES; do
+            if [ -f "$file" ]; then
+                mkdir -p "$TEMP_DIR/$(dirname $file)"
+                git show :"$file" > "$TEMP_DIR/$file"
+            fi
+        done
+        
+        if ! vectra-guard scan-secrets --path "$TEMP_DIR" 2>/dev/null; then
+            echo "   ❌ Exposed secrets detected in staged files!"
+            echo "   Review and remove secrets before committing"
+            exit 1
+        fi
+        echo "   ✅ No secrets found"
+    fi
+    echo ""
+    
+    # 4. Security code scan (warning only)
+    echo "🔒 Scanning for security issues..."
+    if ! vectra-guard scan-security --path . --languages go,python,c,config 2>/dev/null; then
+        echo "   ⚠️  Security warnings found (review above)"
+    else
+        echo "   ✅ No security issues"
+    fi
+    echo ""
+    
+    echo "✅ All pre-commit checks passed!"
+    exit 0
+    ```
+  </Tab>
+
+  <Tab title="Script Validation Only">
+    ```bash .git/hooks/pre-commit
+    #!/bin/bash
+    # Vectra Guard Pre-commit Hook - Scripts Only
+    
+    SCRIPTS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(sh|bash)$')
+    
+    if [ -n "$SCRIPTS" ]; then
+        echo "🛡️  Vectra Guard: Validating scripts..."
+        for script in $SCRIPTS; do
+            if [ -f "$script" ]; then
+                echo "   Checking: $script"
+                if ! vectra-guard validate "$script"; then
+                    echo "❌ Security issues found in: $script"
+                    echo "   Run: vectra-guard explain $script"
+                    exit 1
+                fi
+            fi
+        done
+        echo "✅ All scripts validated"
+    fi
+    ```
+  </Tab>
+
+  <Tab title="Secret Scanning Only">
+    ```bash .git/hooks/pre-commit
+    #!/bin/bash
+    # Vectra Guard Pre-commit Hook - Secret Scanning
+    
+    echo "🔍 Vectra Guard: Scanning for secrets..."
+    
+    STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+    if [ -n "$STAGED_FILES" ]; then
+        TEMP_DIR=$(mktemp -d)
+        trap "rm -rf $TEMP_DIR" EXIT
+        
+        for file in $STAGED_FILES; do
+            if [ -f "$file" ]; then
+                mkdir -p "$TEMP_DIR/$(dirname $file)"
+                git show :"$file" > "$TEMP_DIR/$file"
+            fi
+        done
+        
+        if ! vectra-guard scan-secrets --path "$TEMP_DIR"; then
+            echo "❌ Exposed secrets detected!"
+            exit 1
+        fi
+        echo "✅ No secrets found"
+    fi
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Pre-Push Hook
+
+### Validate Before Push
+
+```bash .git/hooks/pre-push
+#!/bin/bash
+# Vectra Guard Pre-push Hook
+
+set -e
+
+echo "🛡️  Vectra Guard: Running pre-push validation..."
+echo ""
+
+# 1. Validate all scripts in repository
+echo "📝 Validating all scripts..."
+SCRIPT_COUNT=0
+FAILED_SCRIPTS=""
+
+for script in $(find . -type f -name "*.sh" -o -name "*.bash" | grep -v ".git"); do
+    if ! vectra-guard validate "$script" 2>/dev/null; then
+        FAILED_SCRIPTS="$FAILED_SCRIPTS\n  - $script"
+        SCRIPT_COUNT=$((SCRIPT_COUNT + 1))
+    fi
+done
+
+if [ $SCRIPT_COUNT -gt 0 ]; then
+    echo "❌ Failed validation for $SCRIPT_COUNT script(s):"
+    echo -e "$FAILED_SCRIPTS"
+    echo ""
+    echo "Fix issues or use 'git push --no-verify' to bypass (not recommended)"
+    exit 1
+fi
+echo "   ✅ All scripts validated"
+echo ""
+
+# 2. CVE scan
+echo "🔎 Scanning for vulnerable dependencies..."
+if ! vectra-guard cve sync --path . 2>/dev/null; then
+    echo "   ⚠️  Could not sync CVE database"
+fi
+
+if ! vectra-guard cve scan --path . 2>/dev/null; then
+    echo "   ❌ Vulnerable dependencies found!"
+    echo "   Run: vectra-guard cve scan --path ."
+    exit 1
+fi
+echo "   ✅ No critical vulnerabilities"
+echo ""
+
+# 3. Secret scan
+echo "🔍 Scanning for secrets..."
+if ! vectra-guard scan-secrets --path . 2>/dev/null; then
+    echo "   ❌ Exposed secrets detected!"
+    exit 1
+fi
+echo "   ✅ No secrets found"
+echo ""
+
+echo "✅ All pre-push checks passed!"
+exit 0
+```
+
+---
+
+## Automatic Hook Installation
+
+The `setup-cursor-protection.sh` script can automatically install pre-commit hooks:
+
+```bash
+# Enable pre-commit hook installation
+VG_ENABLE_PRECOMMIT=1 ./scripts/setup-cursor-protection.sh
+```
+
+From the script (lines 174-227):
+
+```bash
+if [ "${VG_ENABLE_PRECOMMIT:-0}" = "1" ]; then
+    mkdir -p "$WORKSPACE/.git/hooks"
+    
+    cat > "$WORKSPACE/.git/hooks/pre-commit" << 'HOOKEOF'
+#!/bin/bash
+# Vectra Guard Pre-commit Hook
+
+echo "🛡️  Vectra Guard: Validating scripts..."
+
+SCRIPTS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(sh|bash)$')
+
+if [ -n "$SCRIPTS" ]; then
+    for script in $SCRIPTS; do
+        if [ -f "$script" ]; then
+            echo "   Checking: $script"
+            if ! vectra-guard validate "$script"; then
+                echo ""
+                echo "❌ Security issues found in: $script"
+                echo ""
+                echo "To see details, run:"
+                echo "  vectra-guard explain $script"
+                echo ""
+                echo "Fix issues or use 'git commit --no-verify' to bypass (not recommended)"
+                exit 1
+            fi
+        fi
+    done
+    echo "✅ All scripts validated"
+fi
+
+exit 0
+HOOKEOF
+    
+    chmod +x "$WORKSPACE/.git/hooks/pre-commit"
+    echo "✅ Created git pre-commit hook"
+fi
+```
+
+---
+
+## Manual Hook Installation
+
+<Steps>
+  <Step title="Navigate to Git Hooks Directory">
+    ```bash
+    cd .git/hooks
+    ```
+  </Step>
+
+  <Step title="Create Pre-Commit Hook">
+    ```bash
+    # Copy one of the examples above
+    nano pre-commit
+    
+    # Or download from repository
+    curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/examples/pre-commit > pre-commit
+    ```
+  </Step>
+
+  <Step title="Make Executable">
+    ```bash
+    chmod +x pre-commit
+    ```
+  </Step>
+
+  <Step title="Test the Hook">
+    ```bash
+    # Create a test commit
+    echo 'test' > test.txt
+    git add test.txt
+    git commit -m "test hook"
+    
+    # Hook should run automatically
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Bypassing Hooks
+
+### When to Bypass
+
+⚠️ **Only bypass hooks when absolutely necessary**
+
+```bash
+# Bypass pre-commit
+git commit --no-verify -m "emergency fix"
+
+# Bypass pre-push
+git push --no-verify
+```
+
+### Safe Bypass Workflow
+
+```bash
+# 1. Understand the issue
+vectra-guard explain risky-script.sh
+
+# 2. Fix if possible
+# Edit the script to remove risky patterns
+
+# 3. If unavoidable, document and bypass
+git commit --no-verify -m "fix: emergency deploy (VG bypass: reviewed manually)"
+
+# 4. Create follow-up issue
+gh issue create --title "Review bypassed pre-commit in commit abc123"
+```
+
+---
+
+## Hook Templates
+
+### Minimal Hook
+
+```bash
+#!/bin/bash
+vectra-guard validate $(git diff --cached --name-only | grep '\.sh$') || exit 1
+```
+
+### Warning-Only Hook
+
+```bash
+#!/bin/bash
+SCRIPTS=$(git diff --cached --name-only | grep '\.sh$')
+if [ -n "$SCRIPTS" ]; then
+    for script in $SCRIPTS; do
+        if ! vectra-guard validate "$script"; then
+            echo "⚠️  Warning: Security issues in $script"
+            echo "   Consider running: vectra-guard explain $script"
+        fi
+    done
+fi
+exit 0  # Always succeed (warning only)
+```
+
+### Conditional Hook
+
+```bash
+#!/bin/bash
+# Only enforce on main/master branch
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$BRANCH" == "main" || "$BRANCH" == "master" ]]; then
+    vectra-guard validate $(git diff --cached --name-only | grep '\.sh$') || exit 1
+fi
+```
+
+---
+
+## Shared Hooks (Git Template)
+
+Share hooks across your team:
+
+<Steps>
+  <Step title="Create Template Directory">
+    ```bash
+    mkdir -p ~/.git-templates/hooks
+    ```
+  </Step>
+
+  <Step title="Add Hook to Template">
+    ```bash
+    # Copy your pre-commit hook
+    cp .git/hooks/pre-commit ~/.git-templates/hooks/
+    ```
+  </Step>
+
+  <Step title="Configure Git to Use Template">
+    ```bash
+    git config --global init.templateDir ~/.git-templates
+    ```
+  </Step>
+
+  <Step title="Apply to Existing Repos">
+    ```bash
+    cd /path/to/repo
+    git init  # Re-initializes with template
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Best Practices
+
+### 1. Keep Hooks Fast
+
+```bash
+# Only scan staged files, not entire repo
+git diff --cached --name-only --diff-filter=ACM
+
+# Use selective validation
+vectra-guard validate changed-file.sh
+```
+
+### 2. Provide Clear Error Messages
+
+```bash
+if ! vectra-guard validate "$script"; then
+    echo "❌ Security issues found in: $script"
+    echo ""
+    echo "To see details:"
+    echo "  vectra-guard explain $script"
+    echo ""
+    echo "To bypass (not recommended):"
+    echo "  git commit --no-verify"
+    exit 1
+fi
+```
+
+### 3. Make Hooks Optional
+
+```bash
+# Check for environment variable
+if [ "${VECTRA_GUARD_SKIP:-0}" = "1" ]; then
+    echo "ℹ️  Vectra Guard checks skipped (VECTRA_GUARD_SKIP=1)"
+    exit 0
+fi
+```
+
+### 4. Log Hook Execution
+
+```bash
+LOG_FILE="~/.vectra-guard/hook-log.txt"
+echo "[$(date)] Pre-commit hook executed" >> "$LOG_FILE"
+```
+
+---
+
+## Troubleshooting
+
+### Hook Not Running
+
+```bash
+# Check if hook is executable
+ls -l .git/hooks/pre-commit
+
+# Make executable
+chmod +x .git/hooks/pre-commit
+```
+
+### Vectra Guard Not Found
+
+```bash
+# Add to hook:
+if ! command -v vectra-guard &> /dev/null; then
+    echo "❌ vectra-guard not found in PATH"
+    echo "   Install: curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash"
+    exit 1
+fi
+```
+
+### Hook Failing Unexpectedly
+
+```bash
+# Debug mode
+set -x  # Add to top of hook script
+
+# Test manually
+bash -x .git/hooks/pre-commit
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CI/CD Integration" icon="circle-check" href="/integrations/ci-cd">
+    Add validation to pipelines
+  </Card>
+  <Card title="IDE Integration" icon="code" href="/integrations/ide-integration">
+    Configure VSCode and Cursor
+  </Card>
+  <Card title="AI Agents" icon="robot" href="/integrations/ai-agents">
+    Set up agent security
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Customize validation rules
+  </Card>
+</CardGroup>

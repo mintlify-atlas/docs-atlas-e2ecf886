@@ -1,0 +1,203 @@
+---
+title: "vg init"
+description: "Initialize Vectra Guard configuration file"
+---
+
+## Syntax
+
+```bash
+vectra-guard init [OPTIONS]
+vg init [OPTIONS]
+```
+
+## Description
+
+Generate a default configuration file with recommended security settings. Creates either a global config (`~/.config/vectra-guard/config.yaml`) or a local repo config (`.vectra-guard/config.yaml`).
+
+## Options
+
+<ParamField path="--force" type="boolean" default="false">
+  Overwrite existing configuration file if one exists
+</ParamField>
+
+<ParamField path="--toml" type="boolean" default="false">
+  Generate config in TOML format instead of YAML
+</ParamField>
+
+<ParamField path="--local" type="boolean" default="false">
+  Create config in local `.vectra-guard/` directory (repo-specific)
+</ParamField>
+
+<ParamField path="--global" type="boolean" default="true">
+  Create config in `~/.config/vectra-guard/` (user-wide). This is the default when neither `--local` nor `--global` is specified.
+</ParamField>
+
+## Exit Codes
+
+- **0**: Configuration created successfully
+- **1**: Error (e.g., file exists without --force)
+
+## Examples
+
+### Initialize global config (default)
+
+```bash
+vg init
+# Creates: ~/.config/vectra-guard/config.yaml
+# Config initialized at ~/.config/vectra-guard/config.yaml
+```
+
+### Initialize local repo config
+
+```bash
+vg init --local
+# Creates: .vectra-guard/config.yaml
+# Also creates: .vectra-guard/cache/
+# Config initialized at .vectra-guard/config.yaml
+```
+
+### Generate TOML format
+
+```bash
+vg init --toml
+# Creates: ~/.config/vectra-guard/config.toml
+```
+
+### Force overwrite existing config
+
+```bash
+vg init --force
+# Overwrites existing config with defaults
+```
+
+### Local TOML config
+
+```bash
+vg init --local --toml
+# Creates: .vectra-guard/config.toml
+```
+
+## Generated Configuration
+
+The default config includes:
+
+### YAML format
+
+```yaml
+logging:
+  format: json
+
+policies:
+  allowlist:
+    - echo "safe"
+    - touch /tmp/ok
+  denylist:
+    - rm -rf /
+    - sudo
+    - mkfs
+    - dd if=
+
+sandbox:
+  cache_dir: ~/.vectra-guard/cache
+  workspace_dir: /current/directory
+
+cve:
+  enabled: false
+  cache_dir: ~/.vectra-guard/cve
+  update_interval_hours: 24
+  sources:
+    - osv
+
+env_protection:
+  enabled: true
+  masking_mode: full  # Options: full, partial, hash, fake
+  block_env_access: true  # Block printenv, env commands
+  block_dotenv_read: true  # Block reading .env files
+  allow_read_vars:
+    - PATH
+    - HOME
+    - USER
+```
+
+### TOML format
+
+```toml
+[logging]
+format = "json"
+
+[policies]
+allowlist = ["echo \"safe\"", "touch /tmp/ok"]
+denylist = ["rm -rf /", "sudo ", "mkfs", "dd if="]
+
+[sandbox]
+cache_dir = "~/.vectra-guard/cache"
+workspace_dir = "/current/directory"
+
+[cve]
+enabled = false
+cache_dir = "~/.vectra-guard/cve"
+update_interval_hours = 24
+sources = ["osv"]
+
+[env_protection]
+enabled = true
+masking_mode = "full"  # Options: full, partial, hash, fake
+block_env_access = true  # Block printenv, env commands
+block_dotenv_read = true  # Block reading .env files
+allow_read_vars = ["PATH", "HOME", "USER"]
+```
+
+## Customization After Init
+
+After initialization, edit the config to:
+
+1. **Enable CVE scanning**:
+   ```yaml
+   cve:
+     enabled: true
+   ```
+
+2. **Adjust guard level**:
+   ```yaml
+   guard_level:
+     level: high  # off, low, medium, high, paranoid
+   ```
+
+3. **Configure sandbox mode**:
+   ```yaml
+   sandbox:
+     mode: auto  # always, auto, never
+     enable_cache: true
+   ```
+
+4. **Add custom policies**:
+   ```yaml
+   policies:
+     allowlist:
+       - npm install
+       - git status
+     denylist:
+       - curl.*\|.*sh
+   ```
+
+5. **Enable soft delete**:
+   ```yaml
+   soft_delete:
+     enabled: true
+     retention_days: 7
+   ```
+
+## Config Discovery Order
+
+Vectra Guard searches for config in this order:
+1. `--config` flag (if provided)
+2. `.vectra-guard/config.yaml` (local repo)
+3. `./vectra-guard.yaml` (current directory)
+4. `~/.config/vectra-guard/config.yaml` (global)
+5. Built-in defaults
+
+## Related Commands
+
+- Configuration guide: See `/configuration` docs
+- [exec](/cli/exec) - Execute with configured settings
+- [validate](/cli/validate) - Validate scripts using configured policies

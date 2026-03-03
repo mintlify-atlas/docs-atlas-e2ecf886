@@ -1,0 +1,196 @@
+---
+title: "vg context"
+description: "Generate context summaries of code and documentation files"
+---
+
+## Syntax
+
+```bash
+vectra-guard context summarize <mode> <path> [options]
+vg context summarize <mode> <path> [options]
+```
+
+## Subcommands
+
+### context summarize
+
+Generate intelligent summaries of files or repositories.
+
+```bash
+vg context summarize <mode> <path> [--max <n>] [--output <format>] [--since <ref>]
+```
+
+**Arguments**:
+- `mode`: Summary mode - `code`, `advanced`, `docs`, `doc`, or `text`
+- `path`: File or directory to summarize
+
+<ParamField path="--max" type="integer" default="5">
+  Maximum number of summary lines or key points per file
+</ParamField>
+
+<ParamField path="--output" type="string" default="text">
+  Output format: `text` or `json`
+</ParamField>
+
+<ParamField path="--since" type="string">
+  Only process files changed since commit/time (e.g., `HEAD~1`, `2024-01-01`, `main..feature-branch`)
+</ParamField>
+
+## Summary Modes
+
+### `code`
+Basic code summarization - extracts function signatures, main logic blocks, and key operations.
+
+### `advanced`
+Advanced code analysis - includes control flow, dependencies, and architectural patterns.
+
+### `docs` / `doc` / `text`
+Documentation and text summarization - extracts key concepts, headings, and main points.
+
+## Examples
+
+### Summarize a single file
+
+```bash
+vg context summarize code src/api.go
+# Output:
+# - Package: api
+# - Imports: net/http, encoding/json, database/sql
+# - Function: HandleRequest(w http.ResponseWriter, r *http.Request)
+# - Function: ValidateInput(data map[string]interface{}) error
+# - Uses database connection pool
+```
+
+### Summarize entire repository
+
+```bash
+vg context summarize code . --max 3
+# 📄 src/main.go
+# ────────────────────────────────────────────────────────────
+#   - Entry point: main()
+#   - Initializes HTTP server on :8080
+#   - Configures routes and middleware
+#
+# 📄 src/api/handlers.go
+# ────────────────────────────────────────────────────────────
+#   - REST API handlers
+#   - CRUD operations for User model
+#   - Authentication middleware
+```
+
+### Summarize documentation
+
+```bash
+vg context summarize docs README.md
+# - Project: Vectra Guard
+# - Purpose: Security guard for AI coding agents
+# - Key features: Command validation, sandboxing, CVE scanning
+# - Quick start: Install with one-line curl command
+# - Supports: macOS, Linux, Windows
+```
+
+### Changed files only (git integration)
+
+```bash
+vg context summarize code . --since HEAD~1
+# Only summarizes files modified in last commit
+
+vg context summarize code . --since 2024-03-01
+# Only summarizes files changed since March 1st
+
+vg context summarize code . --since main..feature-branch
+# Only summarizes files different between branches
+```
+
+### JSON output for tools
+
+```bash
+vg context summarize code . --output json | jq
+# {
+#   "mode": "code",
+#   "path": ".",
+#   "fileCount": 12,
+#   "files": [
+#     {
+#       "path": "src/main.go",
+#       "summary": [
+#         "Entry point: main()",
+#         "Initializes HTTP server on :8080",
+#         "Configures routes and middleware"
+#       ]
+#     }
+#   ]
+# }
+```
+
+### Advanced code analysis
+
+```bash
+vg context summarize advanced src/security/ --max 5
+# Provides deeper analysis:
+# - Control flow patterns
+# - Dependency injection
+# - Error handling strategies
+# - Concurrent operations
+# - Security checks
+```
+
+### Large repository with caching
+
+```bash
+# First run: analyzes all files and caches results
+vg context summarize code .
+
+# Subsequent runs: uses cache for unchanged files (much faster)
+vg context summarize code .
+```
+
+### Filter by file changes in PR
+
+```bash
+# Summarize only files changed in current PR
+git fetch origin main
+vg context summarize code . --since origin/main..HEAD
+```
+
+## Caching
+
+Summaries are cached in:
+- `.vectra-guard/cache/context-summaries/` (repo-local)
+- `~/.vectra-guard/cache/context-summaries/` (global fallback)
+
+Cache is used automatically when:
+- File hasn't changed since last summary
+- Same mode was used
+
+## Use Cases
+
+### Code review preparation
+```bash
+vg context summarize code . --since main..feature --output json > pr-summary.json
+# Generate context for code review
+```
+
+### Documentation generation
+```bash
+vg context summarize advanced src/ > ARCHITECTURE.md
+# Create architecture documentation from code
+```
+
+### Onboarding new developers
+```bash
+vg context summarize code . --max 3 > PROJECT_OVERVIEW.md
+# Quick project overview for new team members
+```
+
+### AI agent context
+```bash
+CONTEXT=$(vg context summarize code src/)
+echo "Project context: $CONTEXT" | agent-cli
+# Provide condensed codebase context to AI
+```
+
+## Related Commands
+
+- [audit repo](/cli/audit#audit-repo) - Full repository security audit
+- [scan-security](/cli/scan-security) - Security-focused code scanning

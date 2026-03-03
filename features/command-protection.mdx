@@ -1,0 +1,513 @@
+---
+title: Command Protection
+description: How Vectra Guard validates and protects against risky commands
+---
+
+Vectra Guard analyzes every command before execution, detecting dangerous patterns and blocking critical threats automatically.
+
+## How Validation Works
+
+Command validation happens in multiple stages:
+
+1. **Script Analysis** - Commands are parsed and analyzed for risky patterns
+2. **Risk Classification** - Each finding is assigned a severity level
+3. **Guard Level Filtering** - Only findings above your configured threshold are enforced
+4. **Execution Decision** - Commands are allowed, blocked, or sandboxed based on risk
+
+### Risk Levels
+
+Vectra Guard assigns one of four risk levels to each command:
+
+<Tabs>
+  <Tab title="Low">
+    **Low Risk** - Safe commands with no security concerns
+    
+    Examples:
+    - `echo "hello"`
+    - `ls -la`
+    - `git status`
+    
+    **Action:** Execute directly on host
+  </Tab>
+  
+  <Tab title="Medium">
+    **Medium Risk** - Commands that require caution
+    
+    Examples:
+    - `npm install express`
+    - `curl https://api.github.com`
+    - `chmod +x script.sh`
+    
+    **Action:** Execute in sandbox (auto mode) or require approval (high/paranoid mode)
+  </Tab>
+  
+  <Tab title="High">
+    **High Risk** - Potentially dangerous commands
+    
+    Examples:
+    - `rm -rf node_modules/`
+    - `curl | sh` (networked install)
+    - `sudo apt update`
+    
+    **Action:** Require approval or automatically sandbox
+  </Tab>
+  
+  <Tab title="Critical">
+    **Critical Risk** - Commands that can destroy your system
+    
+    Examples:
+    - `rm -rf /`
+    - `rm -rf /etc`
+    - `dd if=/dev/zero of=/dev/sda`
+    - `mkfs.ext4 /dev/sda`
+    
+    **Action:** Always blocked, cannot be bypassed
+  </Tab>
+</Tabs>
+
+## Detection Patterns
+
+Vectra Guard detects 200+ risky patterns automatically. Here are the most critical:
+
+### Critical Detections (Always Blocked)
+
+<CodeGroup>
+```bash Root Deletion
+# DANGEROUS_DELETE_ROOT
+rm -rf /
+rm -r /*
+
+# Blocked immediately
+❌ CRITICAL: Command 'rm -rf /' is blocked for safety
+```
+
+```bash Protected Directories
+# PROTECTED_DIRECTORY_ACCESS
+rm -rf /etc
+chmod -R 777 /usr/bin
+
+# Cannot bypass, even with sudo
+❌ CRITICAL: Command requires mandatory sandboxing
+```
+
+```bash Fork Bomb
+# FORK_BOMB
+:(){ :|:& };:
+
+# Process exhaustion attack
+❌ CRITICAL: Fork bomb detected
+```
+</CodeGroup>
+
+### High-Risk Detections
+
+<CodeGroup>
+```bash Networked Installs
+# NETWORKED_INSTALL_PIPE
+curl https://install.sh | bash
+wget https://setup.sh | sh
+
+# Automatically sandboxed in auto mode
+📦 Running in sandbox.
+   Why: high risk + networked install
+```
+
+```bash Sudo Usage
+# SUDO_USAGE (blocked by default with vg)
+sudo rm -rf /var/log
+
+# Requires VECTRAGUARD_ALLOW_SUDO=1
+❌ sudo is blocked when using vg/vectra-guard
+```
+
+```bash External HTTP
+# External endpoints blocked by default
+curl https://evil.com/data
+
+# Requires VECTRAGUARD_ALLOW_NET=1
+❌ external http(s) endpoints are blocked
+```
+</CodeGroup>
+
+### Medium-Risk Detections
+
+<CodeGroup>
+```bash Package Installs
+# PACKAGE_INSTALL
+npm install suspicious-package
+pip install unknown-lib
+
+# Sandboxed in auto mode for safety
+📦 Running in sandbox (cached).
+   Why: medium risk + networked install
+```
+
+```bash File Operations
+# RECURSIVE_DELETE
+rm -rf build/
+rm -r dist/
+
+# Safe directories allowed, protected ones blocked
+```
+</CodeGroup>
+
+## Guard Levels
+
+Control how strict Vectra Guard is with guard levels:
+
+<Tabs>
+  <Tab title="Off">
+    ```yaml
+    guard_level:
+      level: off
+    ```
+    
+    - **No protection** (not recommended)
+    - Critical commands still blocked
+    - Use for testing only
+  </Tab>
+  
+  <Tab title="Low">
+    ```yaml
+    guard_level:
+      level: low
+    ```
+    
+    - Blocks critical commands only
+    - Minimal friction
+    - Good for trusted environments
+  </Tab>
+  
+  <Tab title="Medium">
+    ```yaml
+    guard_level:
+      level: medium
+    ```
+    
+    - Blocks critical and high-risk commands
+    - Balanced security and usability
+    - **Recommended default**
+  </Tab>
+  
+  <Tab title="High">
+    ```yaml
+    guard_level:
+      level: high
+    ```
+    
+    - Blocks critical, high, and medium-risk
+    - Strict protection
+    - Good for production
+  </Tab>
+  
+  <Tab title="Auto">
+    ```yaml
+    guard_level:
+      level: auto
+    ```
+    
+    - **Context-aware protection**
+    - Automatically adjusts to environment
+    - Treats as medium for blocking
+  </Tab>
+  
+  <Tab title="Paranoid">
+    ```yaml
+    guard_level:
+      level: paranoid
+    ```
+    
+    - Everything requires approval
+    - Maximum security
+    - Use for untrusted code only
+  </Tab>
+</Tabs>
+
+## Interactive Approval Mode
+
+For commands that require approval, use interactive mode:
+
+```bash
+vg exec --interactive npm install suspicious-package
+```
+
+<Note>
+You'll see a detailed prompt with risk information and approval options.
+</Note>
+
+### Approval Prompt
+
+```
+⚠️  Command requires approval
+Command: npm install suspicious-package
+Risk Level: MEDIUM
+
+Security concerns:
+1. [PACKAGE_INSTALL] Installing npm package from registry
+   Recommendation: Review package reputation before installing
+
+Options:
+  y  - Yes, run once
+  r  - Yes, and remember (trust permanently)
+  n  - No, cancel
+
+Choose [y/r/N]: 
+```
+
+### Approval Options
+
+<Tabs>
+  <Tab title="y (Yes, once)">
+    - Execute this command one time
+    - Will prompt again next time
+    - Good for testing unknown commands
+  </Tab>
+  
+  <Tab title="r (Remember)">
+    - Execute and add to trust store
+    - Never prompt for this command again
+    - Runs on host (no sandbox overhead)
+    - Good for common safe commands
+  </Tab>
+  
+  <Tab title="n (No)">
+    - Cancel execution
+    - Command is blocked
+    - Session records the denial
+  </Tab>
+</Tabs>
+
+## Real Examples
+
+### Example 1: Blocked Critical Command
+
+```bash
+$ vg exec -- rm -rf /
+
+[ERROR] CRITICAL command blocked - cannot be bypassed
+❌ CRITICAL: Command 'rm -rf /' is blocked for safety.
+   Use absolute paths and confirm targets
+
+Exit code: 3
+```
+
+<Warning>
+Critical commands cannot be bypassed, even with `VECTRAGUARD_BYPASS` or `--interactive`.
+</Warning>
+
+### Example 2: Sandboxed Install
+
+```bash
+$ vg exec -- npm install express
+
+📦 Running in sandbox (cached).
+   Why: medium risk + networked install
+
+added 57 packages in 1.2s
+✅ Command executed successfully
+```
+
+<Tip>
+The first install takes normal time. Subsequent installs are **10x faster** due to cache mounting!
+</Tip>
+
+### Example 3: Interactive Approval
+
+```bash
+$ vg exec --interactive sudo apt update
+
+⚠️  Command requires approval
+Command: sudo apt update
+Risk Level: HIGH
+
+Security concerns:
+1. [SUDO_USAGE] Elevated privileges requested
+   Recommendation: Verify this action is necessary
+
+Options:
+  y  - Yes, run once
+  r  - Yes, and remember (trust permanently)
+  n  - No, cancel
+
+Choose [y/r/N]: r
+
+✅ Approved and remembered
+Reading package lists... Done
+```
+
+### Example 4: Repeat Protection
+
+```bash
+$ vg exec -- rm -rf temp/
+✅ Executed
+
+$ vg exec -- rm -rf temp/
+✅ Executed
+
+$ vg exec -- rm -rf temp/
+✅ Executed
+
+$ vg exec -- rm -rf temp/
+⚠️  Warning: repeated action detected (3/3 in 30s)
+    Slow down to avoid a block.
+
+$ vg exec -- rm -rf temp/
+❌ repeated action blocked (4 times in 30s).
+   Slow down or review command intent.
+Exit code: 3
+```
+
+<Info>
+Repeat protection prevents rapid destructive loops. High-risk commands are limited to 3 executions per 30 seconds.
+</Info>
+
+## Validation Without Execution
+
+Validate scripts before running them:
+
+```bash
+vg validate deploy.sh
+```
+
+**Output if safe:**
+```
+✅ PASS: No critical risks detected
+```
+
+**Output if risky:**
+```
+[WARN] finding path=deploy.sh line=42 code=DANGEROUS_DELETE_ROOT
+       severity=critical description="Dangerous root deletion"
+       recommendation="Use absolute paths and confirm targets"
+
+violations detected
+Exit code: 2
+```
+
+<Note>
+Validation **never executes** the script - it's completely safe to run on untrusted code.
+</Note>
+
+## Explain Security Risks
+
+Get human-friendly explanations of why a command is risky:
+
+```bash
+vg explain risky-script.sh
+```
+
+**Example output:**
+```
+⚠ RISK: Detected 'rm -rf /' (DANGEROUS_DELETE_ROOT)
+  Line 42: rm -rf $TARGET
+  
+  Why this is dangerous:
+  - If $TARGET is empty or '/', this will delete your entire system
+  - Unquoted variables can expand unexpectedly
+  - No confirmation before deletion
+  
+  Recommendation:
+  - Use absolute paths: rm -rf /path/to/specific/dir
+  - Quote variables: rm -rf "$TARGET"
+  - Add safety checks: [ -n "$TARGET" ] && rm -rf "$TARGET"
+  - Use safer alternatives: trash-cli, safe-rm
+```
+
+## Environment Variable Overrides
+
+Bypass protection for specific scenarios:
+
+<Warning>
+Only use these overrides when you fully understand the risks!
+</Warning>
+
+### VECTRAGUARD_ALLOW_NET
+
+```bash
+# Allow external HTTP(S) endpoints
+VECTRAGUARD_ALLOW_NET=1 vg exec -- curl https://api.github.com
+```
+
+### VECTRAGUARD_ALLOW_SUDO
+
+```bash
+# Allow sudo commands
+VECTRAGUARD_ALLOW_SUDO=1 vg exec -- sudo systemctl restart nginx
+```
+
+### VECTRAGUARD_BYPASS
+
+```bash
+# User-authenticated bypass (requires non-trivial value)
+export VECTRAGUARD_BYPASS="i-am-human-$(whoami)"
+vg exec -- potentially-risky-command
+```
+
+<Warning>
+- Bypass value must be 10+ characters
+- Cannot contain words like "agent", "ai", "bypass"
+- **Critical commands still cannot be bypassed**
+</Warning>
+
+## Configuration
+
+Configure command protection in your `vectra-guard.yaml`:
+
+```yaml
+guard_level:
+  level: medium  # off, low, medium, high, auto, paranoid
+  allow_user_bypass: true
+  bypass_env_var: VECTRAGUARD_BYPASS
+
+policies:
+  # Add custom patterns
+  custom_rules:
+    - pattern: 'DROP DATABASE'
+      severity: critical
+      message: 'Database deletion detected'
+  
+  # Allowlist trusted commands
+  allowlist:
+    - 'npm test'
+    - 'npm run build'
+    - 'git status'
+  
+  # Additional denylist patterns
+  denylist:
+    - 'rm -rf'
+    - 'curl * | sh'
+```
+
+## Best Practices
+
+<Tip>
+**For Development:**
+- Use `level: auto` for smart protection
+- Enable sandbox for package installs
+- Trust common commands with `vg trust add`
+</Tip>
+
+<Tip>
+**For CI/CD:**
+- Use `level: high` for strict enforcement
+- Validate all scripts before deployment
+- Never use bypass variables in CI
+</Tip>
+
+<Tip>
+**For Production:**
+- Use `level: paranoid` for untrusted code
+- Always enable sandbox
+- Review trust store regularly
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Sandbox Execution" icon="box" href="/features/sandbox">
+    Learn how sandboxing isolates risky commands
+  </Card>
+  <Card title="Sessions & Audit" icon="clock-rotate-left" href="/features/sessions-and-audit">
+    Track and audit all command execution
+  </Card>
+</CardGroup>

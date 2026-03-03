@@ -1,0 +1,193 @@
+---
+title: "vg cve"
+description: "CVE-aware dependency scanning and vulnerability tracking"
+---
+
+## Syntax
+
+```bash
+vectra-guard cve <subcommand> [options]
+vg cve <subcommand> [options]
+```
+
+## Description
+
+Scan dependencies for known vulnerabilities using the OSV (Open Source Vulnerabilities) database. Maintains a local cache for fast lookups and supports npm, pip, Go modules, and other ecosystems.
+
+## Subcommands
+
+### cve sync
+
+Synchronize vulnerability data for project dependencies.
+
+```bash
+vg cve sync [--path <dir>] [--force]
+```
+
+<ParamField path="--path" type="string" default=".">
+  Target directory containing manifest files (package.json, requirements.txt, go.mod, etc.)
+</ParamField>
+
+<ParamField path="--force" type="boolean" default="false">
+  Refresh cached entries even if they're fresh (within update_interval_hours)
+</ParamField>
+
+**What it does**:
+- Discovers package manifests and lockfiles
+- Fetches vulnerability data from OSV
+- Caches results locally for fast subsequent lookups
+- Respects configured update interval (default: 24 hours)
+
+### cve scan
+
+Scan project dependencies and report vulnerabilities.
+
+```bash
+vg cve scan [--path <dir>] [--refresh]
+```
+
+<ParamField path="--path" type="string" default=".">
+  Target directory containing manifest files
+</ParamField>
+
+<ParamField path="--refresh" type="boolean" default="false">
+  Refresh cache before scanning (forces fresh data fetch)
+</ParamField>
+
+**Output**: Detailed report of all vulnerabilities found, grouped by package with CVSS scores and severity ratings.
+
+### cve explain
+
+Get detailed vulnerability information for a specific package.
+
+```bash
+vg cve explain <package[@version]> [--ecosystem <name>] [--refresh]
+```
+
+**Arguments**:
+- `package[@version]`: Package name, optionally with version (e.g., `lodash@4.17.20`)
+
+<ParamField path="--ecosystem" type="string" default="npm">
+  Package ecosystem: `npm`, `PyPI`, `Go`, `Maven`, `RubyGems`, etc.
+</ParamField>
+
+<ParamField path="--refresh" type="boolean" default="false">
+  Fetch fresh data instead of using cache
+</ParamField>
+
+## Configuration
+
+CVE scanning must be enabled in your config:
+
+```yaml
+cve:
+  enabled: true
+  cache_dir: ~/.vectra-guard/cve  # Default
+  update_interval_hours: 24
+  sources:
+    - osv
+```
+
+## Exit Codes
+
+- **0**: Command completed successfully
+- **1**: Error occurred (e.g., CVE disabled, network error, parse error)
+
+## Examples
+
+### Initial setup and sync
+
+```bash
+# Enable in config first
+vg cve sync --path .
+# CVE sync complete: 12 fetched, 0 skipped, 0 errors
+```
+
+### Scan for vulnerabilities
+
+```bash
+vg cve scan --path .
+# 🔎 CVE report (18 packages, 3 advisories)
+#
+# ⚠ lodash@4.17.20 (npm)
+# - CVE-2020-28500 (CVSS 7.5, high): Regular Expression Denial of Service (ReDoS)
+# - CVE-2021-23337 (CVSS 9.8, critical): Command Injection in lodash
+#
+# ⚠ requests@2.25.0 (PyPI)
+# - CVE-2023-32681 (CVSS 6.5, medium): Proxy-Authorization header exposure
+```
+
+### Explain specific package
+
+```bash
+vg cve explain lodash@4.17.20 --ecosystem npm
+# ⚠ lodash@4.17.20 (npm)
+# - CVE-2020-28500 (CVSS 7.5, high): Regular Expression Denial of Service (ReDoS)
+#   Summary: Lodash versions prior to 4.17.21 are vulnerable to ReDoS...
+#
+# - CVE-2021-23337 (CVSS 9.8, critical): Command Injection in lodash
+#   Summary: Lodash template function can be tricked into executing arbitrary code...
+```
+
+### Explain by name (all cached versions)
+
+```bash
+vg cve explain lodash --ecosystem npm
+# Shows vulnerabilities for all cached versions of lodash
+```
+
+### Force refresh cache
+
+```bash
+vg cve sync --force
+# Fetches fresh data for all packages regardless of cache age
+```
+
+### Check specific Python package
+
+```bash
+vg cve explain requests@2.25.0 --ecosystem PyPI
+```
+
+### Integration in CI
+
+```bash
+#!/bin/bash
+# Pre-deployment CVE check
+vg cve scan --refresh
+if [ $? -ne 0 ]; then
+  echo "CVE scan failed!"
+  exit 1
+fi
+```
+
+### Regular maintenance
+
+```bash
+# Run weekly to keep cache fresh
+vg cve sync --force > /dev/null
+```
+
+## Supported Ecosystems
+
+- **npm** (package.json, package-lock.json)
+- **PyPI** (requirements.txt, Pipfile.lock)
+- **Go** (go.mod, go.sum)
+- **Maven** (pom.xml)
+- **RubyGems** (Gemfile.lock)
+- **Cargo** (Cargo.lock)
+
+## Cache Location
+
+By default: `~/.vectra-guard/cve/cache.json`
+
+Configure via:
+```yaml
+cve:
+  cache_dir: /custom/path
+```
+
+## Related Commands
+
+- [audit](/cli/audit) - Multi-tool security audit (includes CVE scanning)
+- [scan-security](/cli/scan-security) - Static code analysis

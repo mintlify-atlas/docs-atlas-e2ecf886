@@ -1,0 +1,651 @@
+---
+title: "CI/CD Integration"
+description: "Integrate Vectra Guard into GitHub Actions, GitLab CI, and other CI/CD pipelines"
+---
+
+# CI/CD Integration
+
+Vectra Guard provides security validation for your CI/CD pipelines, ensuring scripts and dependencies are safe before deployment.
+
+## Quick Start
+
+Add Vectra Guard to your CI pipeline:
+
+```yaml .github/workflows/security.yml
+name: Security Validation
+
+on: [push, pull_request]
+
+jobs:
+  vectra-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Vectra Guard
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      
+      - name: Validate Scripts
+        run: |
+          find . -name "*.sh" -exec vectra-guard validate {} \;
+      
+      - name: CVE Scan
+        run: |
+          vectra-guard cve sync --path .
+          vectra-guard cve scan --path .
+```
+
+---
+
+## GitHub Actions
+
+### Complete Security Workflow
+
+<Tabs>
+  <Tab title="Full Workflow">
+    ```yaml .github/workflows/security.yml
+    name: Vectra Guard Security
+
+    on:
+      push:
+        branches: [main, develop]
+      pull_request:
+        branches: [main]
+
+    jobs:
+      security-validation:
+        name: Security Validation
+        runs-on: ubuntu-latest
+        
+        steps:
+          - name: Checkout Code
+            uses: actions/checkout@v3
+          
+          - name: Install Vectra Guard
+            run: |
+              curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+              echo "$HOME/.local/bin" >> $GITHUB_PATH
+          
+          - name: Initialize Configuration
+            run: |
+              vectra-guard init --local
+          
+          - name: Validate Shell Scripts
+            run: |
+              echo "🛡️ Validating shell scripts..."
+              SCRIPT_COUNT=0
+              FAILED_SCRIPTS=""
+              
+              for script in $(find . -type f -name "*.sh" -o -name "*.bash"); do
+                echo "  Checking: $script"
+                if ! vectra-guard validate "$script"; then
+                  FAILED_SCRIPTS="$FAILED_SCRIPTS\n  - $script"
+                  SCRIPT_COUNT=$((SCRIPT_COUNT + 1))
+                fi
+              done
+              
+              if [ $SCRIPT_COUNT -gt 0 ]; then
+                echo "❌ Failed validation for $SCRIPT_COUNT script(s):"
+                echo -e "$FAILED_SCRIPTS"
+                exit 1
+              fi
+              
+              echo "✅ All scripts validated successfully"
+          
+          - name: Scan for Secrets
+            run: |
+              echo "🔍 Scanning for exposed secrets..."
+              if ! vectra-guard scan-secrets --path .; then
+                echo "❌ Exposed secrets found!"
+                exit 1
+              fi
+              echo "✅ No secrets found"
+          
+          - name: Security Code Scan
+            run: |
+              echo "🔒 Scanning for security issues..."
+              if ! vectra-guard scan-security --path . --languages go,python,c,config; then
+                echo "⚠️ Security issues found (review above)"
+                # Non-blocking warning
+              fi
+          
+          - name: Sync CVE Database
+            run: |
+              echo "📦 Syncing CVE database..."
+              vectra-guard cve sync --path .
+          
+          - name: CVE Dependency Scan
+            run: |
+              echo "🔎 Scanning dependencies for CVEs..."
+              if ! vectra-guard cve scan --path .; then
+                echo "❌ Vulnerable dependencies found!"
+                exit 1
+              fi
+              echo "✅ No critical vulnerabilities"
+          
+          - name: Generate Security Report
+            if: always()
+            run: |
+              vectra-guard audit repo --path . --output json > security-report.json
+          
+          - name: Upload Security Report
+            if: always()
+            uses: actions/upload-artifact@v3
+            with:
+              name: security-report
+              path: security-report.json
+    ```
+  </Tab>
+
+  <Tab title="Script Validation Only">
+    ```yaml .github/workflows/validate-scripts.yml
+    name: Validate Scripts
+
+    on: [push, pull_request]
+
+    jobs:
+      validate:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v3
+          
+          - name: Install Vectra Guard
+            run: |
+              curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+              echo "$HOME/.local/bin" >> $GITHUB_PATH
+          
+          - name: Validate All Scripts
+            run: |
+              find . -name "*.sh" -exec vectra-guard validate {} \;
+    ```
+  </Tab>
+
+  <Tab title="CVE Scanning Only">
+    ```yaml .github/workflows/cve-scan.yml
+    name: CVE Scan
+
+    on:
+      push:
+        paths:
+          - 'package.json'
+          - 'package-lock.json'
+          - 'requirements.txt'
+          - 'go.mod'
+          - 'Cargo.toml'
+
+    jobs:
+      cve-scan:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v3
+          
+          - name: Install Vectra Guard
+            run: |
+              curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+              echo "$HOME/.local/bin" >> $GITHUB_PATH
+          
+          - name: Sync and Scan
+            run: |
+              vectra-guard cve sync --path .
+              vectra-guard cve scan --path .
+    ```
+  </Tab>
+
+  <Tab title="PR Comment Bot">
+    ```yaml .github/workflows/security-comment.yml
+    name: Security PR Comment
+
+    on:
+      pull_request:
+        types: [opened, synchronize]
+
+    jobs:
+      security-check:
+        runs-on: ubuntu-latest
+        permissions:
+          pull-requests: write
+        
+        steps:
+          - uses: actions/checkout@v3
+          
+          - name: Install Vectra Guard
+            run: |
+              curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+              echo "$HOME/.local/bin" >> $GITHUB_PATH
+          
+          - name: Run Security Checks
+            id: security
+            run: |
+              # Validate scripts
+              SCRIPT_RESULT=$(vectra-guard validate . 2>&1 || echo "FAILED")
+              
+              # CVE scan
+              vectra-guard cve sync --path .
+              CVE_RESULT=$(vectra-guard cve scan --path . 2>&1 || echo "VULNERABILITIES")
+              
+              # Secret scan
+              SECRET_RESULT=$(vectra-guard scan-secrets --path . 2>&1 || echo "SECRETS_FOUND")
+              
+              # Create report
+              cat > report.md << 'EOF'
+              ## 🛡️ Vectra Guard Security Report
+              
+              ### Script Validation
+              $SCRIPT_RESULT
+              
+              ### CVE Scan
+              $CVE_RESULT
+              
+              ### Secret Scan
+              $SECRET_RESULT
+              EOF
+              
+              echo "report<<EOF" >> $GITHUB_OUTPUT
+              cat report.md >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+          
+          - name: Comment PR
+            uses: actions/github-script@v6
+            with:
+              script: |
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: '${{ steps.security.outputs.report }}'
+                })
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## GitLab CI
+
+### Complete Pipeline
+
+<Tabs>
+  <Tab title="Full Pipeline">
+    ```yaml .gitlab-ci.yml
+    stages:
+      - security
+      - test
+      - deploy
+
+    variables:
+      VECTRA_GUARD_VERSION: "latest"
+
+    before_script:
+      - |
+        if ! command -v vectra-guard &> /dev/null; then
+          curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+          export PATH="$HOME/.local/bin:$PATH"
+        fi
+
+    security:validate-scripts:
+      stage: security
+      script:
+        - echo "🛡️ Validating shell scripts..."
+        - |
+          for script in $(find . -type f -name "*.sh" -o -name "*.bash"); do
+            echo "  Checking: $script"
+            vectra-guard validate "$script" || exit 1
+          done
+        - echo "✅ All scripts validated"
+      only:
+        - merge_requests
+        - main
+
+    security:scan-secrets:
+      stage: security
+      script:
+        - echo "🔍 Scanning for secrets..."
+        - vectra-guard scan-secrets --path .
+      allow_failure: false
+      only:
+        - merge_requests
+        - main
+
+    security:scan-security:
+      stage: security
+      script:
+        - echo "🔒 Scanning for security issues..."
+        - vectra-guard scan-security --path . --languages go,python,c,config
+      allow_failure: true
+      only:
+        - merge_requests
+        - main
+
+    security:cve-scan:
+      stage: security
+      script:
+        - echo "📦 Syncing CVE database..."
+        - vectra-guard cve sync --path .
+        - echo "🔎 Scanning dependencies..."
+        - vectra-guard cve scan --path .
+      artifacts:
+        reports:
+          dependency_scanning: gl-dependency-scanning-report.json
+        expire_in: 1 week
+      only:
+        - merge_requests
+        - main
+
+    security:audit-report:
+      stage: security
+      script:
+        - vectra-guard audit repo --path . --output json > security-audit.json
+      artifacts:
+        paths:
+          - security-audit.json
+        expire_in: 30 days
+      only:
+        - main
+    ```
+  </Tab>
+
+  <Tab title="Script Validation">
+    ```yaml .gitlab-ci.yml
+    stages:
+      - security
+
+    validate-scripts:
+      stage: security
+      before_script:
+        - curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+        - export PATH="$HOME/.local/bin:$PATH"
+      script:
+        - find . -name "*.sh" -exec vectra-guard validate {} \;
+      only:
+        - merge_requests
+        - main
+    ```
+  </Tab>
+
+  <Tab title="CVE Scanning">
+    ```yaml .gitlab-ci.yml
+    stages:
+      - security
+
+    cve-scan:
+      stage: security
+      before_script:
+        - curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+        - export PATH="$HOME/.local/bin:$PATH"
+      script:
+        - vectra-guard cve sync --path .
+        - vectra-guard cve scan --path .
+      only:
+        changes:
+          - package.json
+          - requirements.txt
+          - go.mod
+          - Cargo.toml
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## CircleCI
+
+```yaml .circleci/config.yml
+version: 2.1
+
+jobs:
+  security-validation:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      
+      - run:
+          name: Install Vectra Guard
+          command: |
+            curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+            echo 'export PATH=$HOME/.local/bin:$PATH' >> $BASH_ENV
+      
+      - run:
+          name: Validate Scripts
+          command: |
+            find . -name "*.sh" -exec vectra-guard validate {} \;
+      
+      - run:
+          name: CVE Scan
+          command: |
+            vectra-guard cve sync --path .
+            vectra-guard cve scan --path .
+      
+      - run:
+          name: Secret Scan
+          command: |
+            vectra-guard scan-secrets --path .
+
+workflows:
+  version: 2
+  security:
+    jobs:
+      - security-validation
+```
+
+---
+
+## Jenkins
+
+```groovy Jenkinsfile
+pipeline {
+    agent any
+    
+    stages {
+        stage('Install Vectra Guard') {
+            steps {
+                sh '''
+                    curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+                    export PATH="$HOME/.local/bin:$PATH"
+                '''
+            }
+        }
+        
+        stage('Validate Scripts') {
+            steps {
+                sh '''
+                    export PATH="$HOME/.local/bin:$PATH"
+                    find . -name "*.sh" -exec vectra-guard validate {} \;
+                '''
+            }
+        }
+        
+        stage('CVE Scan') {
+            steps {
+                sh '''
+                    export PATH="$HOME/.local/bin:$PATH"
+                    vectra-guard cve sync --path .
+                    vectra-guard cve scan --path .
+                '''
+            }
+        }
+        
+        stage('Security Scan') {
+            steps {
+                sh '''
+                    export PATH="$HOME/.local/bin:$PATH"
+                    vectra-guard scan-secrets --path .
+                    vectra-guard scan-security --path . --languages go,python,c,config
+                '''
+            }
+        }
+        
+        stage('Generate Report') {
+            steps {
+                sh '''
+                    export PATH="$HOME/.local/bin:$PATH"
+                    vectra-guard audit repo --path . --output json > security-report.json
+                '''
+                archiveArtifacts artifacts: 'security-report.json', fingerprint: true
+            }
+        }
+    }
+    
+    post {
+        failure {
+            echo 'Security validation failed!'
+        }
+        success {
+            echo 'Security validation passed!'
+        }
+    }
+}
+```
+
+---
+
+## Common Patterns
+
+### Pre-Deployment Validation
+
+<CodeGroup>
+  ```bash Script Validation
+  # Validate all scripts before deployment
+  find . -type f -name "*.sh" -exec vectra-guard validate {} \;
+  
+  # Validate specific deployment script
+  vectra-guard validate scripts/deploy.sh
+  
+  # Explain issues if validation fails
+  vectra-guard explain scripts/deploy.sh
+  ```
+
+  ```bash CVE Scanning
+  # Sync CVE database
+  vectra-guard cve sync --path .
+  
+  # Scan all manifests
+  vectra-guard cve scan --path .
+  
+  # Fail on critical vulnerabilities
+  if ! vectra-guard cve scan --path .; then
+    echo "Critical vulnerabilities found!"
+    exit 1
+  fi
+  ```
+
+  ```bash Secret Detection
+  # Scan for exposed secrets
+  vectra-guard scan-secrets --path .
+  
+  # Fail if secrets found
+  if ! vectra-guard scan-secrets --path .; then
+    echo "Exposed secrets detected!"
+    exit 1
+  fi
+  ```
+
+  ```bash Security Code Scan
+  # Scan code for security issues
+  vectra-guard scan-security --path . --languages go,python,c,config
+  
+  # Non-blocking warning mode
+  vectra-guard scan-security --path . || true
+  ```
+</CodeGroup>
+
+### Protected Deployments
+
+```bash
+# Start a CI session
+SESSION=$(vectra-guard session start --agent "github-actions")
+export VECTRAGUARD_SESSION_ID=$SESSION
+
+# Run deployment with protection
+vectra-guard exec -- ./scripts/deploy.sh
+
+# Audit what happened
+vectra-guard session show $SESSION > deployment-audit.log
+```
+
+---
+
+## Exit Codes
+
+Vectra Guard commands return specific exit codes for CI/CD:
+
+| Command | Exit Code | Meaning |
+|---------|-----------|----------|
+| `validate` | 0 | No issues found |
+| `validate` | 1 | Validation failed |
+| `cve scan` | 0 | No vulnerabilities |
+| `cve scan` | 1 | Vulnerabilities found |
+| `scan-secrets` | 0 | No secrets |
+| `scan-secrets` | 2 | Secrets detected |
+| `scan-security` | 0 | No issues |
+| `scan-security` | 1 | Issues found |
+| `exec` | 0 | Command executed successfully |
+| `exec` | 1 | Command blocked or failed |
+
+---
+
+## Best Practices
+
+### 1. Cache CVE Database
+
+```yaml GitHub Actions Cache
+- name: Cache CVE Database
+  uses: actions/cache@v3
+  with:
+    path: ~/.vectra-guard/cve-cache
+    key: vectra-cve-${{ hashFiles('**/package-lock.json', '**/go.sum') }}
+```
+
+### 2. Fail Fast on Critical Issues
+
+```bash
+# Block on secrets
+if ! vectra-guard scan-secrets --path .; then
+  echo "❌ Cannot deploy with exposed secrets"
+  exit 1
+fi
+
+# Block on critical CVEs
+if ! vectra-guard cve scan --path .; then
+  echo "❌ Cannot deploy with vulnerable dependencies"
+  exit 1
+fi
+```
+
+### 3. Generate Audit Reports
+
+```bash
+# Generate comprehensive audit
+vectra-guard audit repo --path . --output json > audit-$(date +%Y%m%d).json
+
+# Upload as artifact
+# (GitHub Actions example)
+```
+
+### 4. Use Non-Blocking Warnings
+
+```bash
+# Security scan as warning (doesn't fail build)
+vectra-guard scan-security --path . || true
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Git Hooks" icon="code-branch" href="/integrations/git-hooks">
+    Add pre-commit validation
+  </Card>
+  <Card title="IDE Integration" icon="code" href="/integrations/ide-integration">
+    Set up local development
+  </Card>
+  <Card title="AI Agents" icon="robot" href="/integrations/ai-agents">
+    Configure agent security
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Customize security policies
+  </Card>
+</CardGroup>

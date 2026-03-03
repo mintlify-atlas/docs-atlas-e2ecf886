@@ -1,0 +1,572 @@
+---
+title: 'Configuration Presets'
+description: 'Pre-configured settings for development, CI/CD, and production environments'
+---
+
+## Quick Start Presets
+
+For most users, copying one of these presets into your `vectra-guard.yaml` is all you need. Each preset is optimized for specific use cases.
+
+<CardGroup cols={2}>
+  <Card title="Developer" icon="laptop-code">
+    Fast, unobtrusive protection for local development
+  </Card>
+  
+  <Card title="CI/CD" icon="gears">
+    Balanced protection for automated pipelines
+  </Card>
+  
+  <Card title="Production" icon="shield">
+    Maximum security for production environments
+  </Card>
+  
+  <Card title="Fast Dev" icon="bolt">
+    Native performance with namespace sandboxing
+  </Card>
+</CardGroup>
+
+## Developer Preset
+
+**Best for:** Local development with minimal friction
+
+**Features:**
+- Auto-detection adjusts protection based on context
+- Smart sandboxing (only risky commands)
+- Minimal isolation for maximum speed
+- Full network access
+- Caching enabled for 10x speedup
+- Force push allowed in dev branches
+
+<CodeGroup>
+```yaml developer.yaml
+# Vectra Guard - Developer Preset
+# Optimized for local development with minimal friction
+
+guard_level:
+  level: auto  # Auto-detect context (low in dev, high in prod)
+  allow_user_bypass: true
+
+sandbox:
+  enabled: true
+  mode: auto  # Smart sandboxing based on risk
+  security_level: permissive  # Minimal isolation for speed
+  runtime: docker
+  image: ubuntu:22.04
+  timeout: 600  # 10 minutes for long builds
+  enable_cache: true
+  network_mode: full  # No network restrictions
+  enable_metrics: true
+  
+policies:
+  monitor_git_ops: true
+  block_force_git: false  # Allow force push in dev
+  detect_prod_env: true
+  only_destructive_sql: true
+  
+  allowlist:
+    - "npm install"
+    - "npm run"
+    - "npm test"
+    - "yarn install"
+    - "pip install"
+    - "go install"
+    - "cargo build"
+    - "make"
+
+logging:
+  format: text  # Human-readable for development
+
+env_protection:
+  enabled: false  # Don't block env access in dev
+```
+
+```bash Usage
+# Copy to your project
+cp ~/.vectra-guard/presets/developer.yaml ./vectra-guard.yaml
+
+# Or use directly
+vg exec --config developer.yaml npm install
+```
+</CodeGroup>
+
+<Tip>
+This preset is ideal for local development where you trust the code you're running.
+</Tip>
+
+## CI/CD Preset
+
+**Best for:** Automated testing and builds in CI/CD pipelines
+
+**Features:**
+- High guard level (strong protection)
+- Always sandbox for reproducible builds
+- Strict isolation
+- No interactive prompts (auto-deny)
+- Caching enabled for faster builds
+- Structured JSON logging
+- Environment protection enabled
+
+<CodeGroup>
+```yaml ci-cd.yaml
+# Vectra Guard - CI/CD Preset
+# Balanced protection for automated pipelines
+
+guard_level:
+  level: high  # Strong protection but allow automation
+  allow_user_bypass: false  # No interactive prompts in CI
+
+sandbox:
+  enabled: true
+  mode: always  # Sandbox everything for reproducible builds
+  security_level: strict  # Strong isolation
+  runtime: docker
+  image: ubuntu:22.04
+  timeout: 900  # 15 minutes for CI builds
+  enable_cache: true  # Speed up CI with caching
+  network_mode: restricted  # Allow outbound, block inbound
+  enable_metrics: true
+  
+policies:
+  monitor_git_ops: true
+  block_force_git: true
+  detect_prod_env: true
+  only_destructive_sql: true
+  
+  allowlist:
+    - "npm ci"
+    - "npm test"
+    - "npm run build"
+    - "pip install -r requirements.txt"
+    - "cargo test"
+    - "go test"
+    - "make test"
+    - "docker build"
+
+logging:
+  format: json  # Structured logs for CI parsing
+
+env_protection:
+  enabled: true
+  masking_mode: partial
+  block_dotenv_read: true
+  block_env_access: false  # Allow env in CI
+```
+
+```bash GitHub Actions
+# .github/workflows/test.yml
+name: Test
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Vectra Guard
+        run: |
+          curl -fsSL https://get.vectra-guard.dev | sh
+          cp .vectra-guard/presets/ci-cd.yaml vectra-guard.yaml
+      - name: Run tests
+        run: vg exec npm test
+```
+
+```bash GitLab CI
+# .gitlab-ci.yml
+test:
+  image: ubuntu:22.04
+  before_script:
+    - curl -fsSL https://get.vectra-guard.dev | sh
+    - cp .vectra-guard/presets/ci-cd.yaml vectra-guard.yaml
+  script:
+    - vg exec npm ci
+    - vg exec npm test
+```
+</CodeGroup>
+
+<Note>
+The `allow_user_bypass: false` setting ensures automated pipelines never hang waiting for user input.
+</Note>
+
+## Production Preset
+
+**Best for:** Production deployments and untrusted environments
+
+**Features:**
+- Paranoid guard level (everything requires approval)
+- No bypasses allowed
+- Always sandbox with maximum isolation
+- No network access
+- No caching (for reproducibility)
+- Full environment variable masking
+- Comprehensive deny list
+
+<CodeGroup>
+```yaml production.yaml
+# Vectra Guard - Production Preset
+# Maximum protection for production environments
+
+guard_level:
+  level: paranoid  # Require approval for everything
+  allow_user_bypass: false  # No bypasses in production
+
+sandbox:
+  enabled: true
+  mode: always  # Always sandbox, no exceptions
+  security_level: paranoid  # Maximum isolation
+  runtime: docker
+  image: ubuntu:22.04
+  timeout: 300
+  enable_cache: false  # No caching for reproducibility
+  network_mode: none  # No network access
+  enable_metrics: true
+  
+policies:
+  monitor_git_ops: true
+  block_force_git: true  # Block force push
+  detect_prod_env: true
+  only_destructive_sql: false  # Flag all SQL
+  
+  denylist:
+    - "rm -rf"
+    - "sudo"
+    - "DROP DATABASE"
+    - "DROP TABLE"
+    - "git push --force"
+
+logging:
+  format: json  # Structured logging for production
+
+env_protection:
+  enabled: true
+  masking_mode: full  # Full masking of sensitive vars
+  block_dotenv_read: true
+  block_env_access: true
+```
+
+```bash Usage
+# In production environment
+export VECTRA_CONFIG=production.yaml
+vg exec ./deploy.sh
+```
+</CodeGroup>
+
+<Warning>
+This preset is **very restrictive**. Test thoroughly in staging before using in production!
+</Warning>
+
+## Fast Development Preset
+
+**Best for:** Local development with native performance
+
+**Features:**
+- Uses namespace-based sandboxing (bubblewrap)
+- Native performance (no Docker overhead)
+- Auto-detect fastest runtime available
+- OverlayFS for isolated `/tmp`
+- Network blocked for safety
+- Comprehensive deny list
+- Shows runtime info for transparency
+
+<CodeGroup>
+```yaml dev-fast.yaml
+# Fast Development Configuration - Namespace-Based Sandboxing
+# Provides native performance with strong security
+
+guard_level:
+  level: high
+  allow_user_bypass: true
+
+sandbox:
+  enabled: true
+  mode: auto
+  
+  # Runtime configuration - auto-select fastest
+  runtime: auto                # Try bubblewrap → namespace → docker
+  auto_detect_env: true        # Auto-detect dev environment
+  prefer_fast: true            # Prefer fast runtimes
+  
+  # Network and caching
+  allow_network: false         # Block network for safety
+  enable_cache: true           # Essential for dev workflow
+  use_overlayfs: true          # Isolate /tmp with OverlayFS
+  
+  # Security (balanced for dev)
+  seccomp_profile: moderate    # Block dangerous syscalls
+  capability_set: minimal      # Drop dangerous capabilities
+  
+  # Observability
+  show_runtime_info: true      # Show selected runtime
+  enable_metrics: true
+  log_output: false
+
+policies:
+  monitor_git_ops: true
+  block_force_git: true
+  only_destructive_sql: true
+  
+  # Comprehensive denylist
+  denylist:
+    # System destruction
+    - "rm -rf /"
+    - "rm -r /*"
+    - "rm -rf /*"
+    - "rm -rf /bin"
+    - "rm -rf /usr"
+    - "rm -rf /etc"
+    
+    # Home directory
+    - "rm -rf ~/*"
+    - "rm -rf $HOME/*"
+    
+    # Dangerous operations
+    - ":(){ :|:& };:"
+    - "dd if=/dev/zero"
+    - "mkfs"
+    
+    # Network exploits
+    - "curl * | sh"
+    - "curl * | bash"
+    - "wget * | sh"
+    - "wget * | bash"
+```
+
+```bash Installation
+# Requires bubblewrap for best performance
+sudo apt install bubblewrap  # Ubuntu/Debian
+sudo dnf install bubblewrap  # Fedora
+sudo pacman -S bubblewrap    # Arch
+
+# Use the preset
+cp dev-fast.yaml vectra-guard.yaml
+vg exec npm install
+```
+</CodeGroup>
+
+<Tip>
+This preset provides **native performance** while maintaining strong security through Linux namespaces.
+</Tip>
+
+## CI Optimized Preset
+
+**Best for:** CI/CD with maximum consistency and observability
+
+<CodeGroup>
+```yaml ci-optimized.yaml
+# CI/CD Optimized Configuration
+# Uses Docker for consistency, with caching enabled
+
+guard_level:
+  level: paranoid
+  allow_user_bypass: false
+
+sandbox:
+  enabled: true
+  mode: always              # Always sandbox in CI
+  
+  # Runtime configuration - Docker for consistency
+  runtime: docker           # Use Docker for maximum compatibility
+  image: ubuntu:22.04
+  timeout: 600              # 10 minutes max
+  
+  # Network and caching
+  allow_network: true       # CI often needs network
+  enable_cache: true        # Speed up CI runs
+  
+  # Security (strict for CI)
+  seccomp_profile: strict   # Block all dangerous syscalls
+  capability_set: none      # Drop all capabilities
+  
+  # Observability
+  show_runtime_info: true   # Show what's happening
+  enable_metrics: true
+  log_output: true          # Log all output
+
+policies:
+  monitor_git_ops: true
+  block_force_git: true
+  detect_prod_env: true
+  only_destructive_sql: true
+  
+  # Comprehensive denylist
+  denylist:
+    - "rm -rf /"
+    - "rm -r /*"
+    - "rm -rf /*"
+    - "rm -rf ~/*"
+    - ":(){ :|:& };:"
+    - "curl * | sh"
+    - "wget * | sh"
+```
+</CodeGroup>
+
+## Production Secure Preset
+
+**Best for:** Zero-trust production environments
+
+**Features:**
+- Maximum isolation with read-only root filesystem
+- Strict seccomp profile and syscall filtering
+- Resource limits (CPU, memory, PIDs)
+- No network access
+- Comprehensive audit logging
+- Minimal environment variables
+- No caching for maximum reproducibility
+
+<Accordion title="View Full Configuration">
+```yaml production-secure.yaml
+guard_level:
+  level: paranoid
+  allow_user_bypass: false
+  require_approval_above: low
+
+policies:
+  monitor_git_ops: true
+  block_force_git: true
+  detect_prod_env: true
+  prod_env_patterns:
+    - prod
+    - production
+    - prd
+    - live
+    - staging
+    - stg
+    - uat
+  
+  only_destructive_sql: true
+  
+  # Minimal allowlist - only read-only operations
+  allowlist:
+    - "git status"
+    - "git diff"
+    - "git log"
+    - "git show"
+    - "ls *"
+    - "cat *"
+    - "pwd"
+    - "echo *"
+  
+  # Comprehensive denylist
+  denylist:
+    - "rm *"
+    - "sudo *"
+    - "dd if="
+    - "mkfs"
+    - "fdisk"
+    - "parted"
+    - "git push --force"
+    - "git push -f"
+    - "DROP DATABASE"
+    - "DROP TABLE"
+    - "TRUNCATE"
+    - "DELETE FROM"
+    - "curl * | sh"
+    - "wget * | bash"
+    - ":(){ :|:& };:"
+    - "rm -rf"
+    - "rm -r"
+
+env_protection:
+  enabled: true
+  masking_mode: full
+  block_dotenv_read: true
+  block_env_access: true
+
+sandbox:
+  enabled: true
+  mode: always
+  security_level: paranoid
+  runtime: docker
+  image: ubuntu:22.04
+  timeout: 600
+  network_mode: none
+  read_only_root: true
+  seccomp_profile: seccomp-profile.json
+  
+  # Resource Limits
+  memory_limit: 512m
+  cpu_limit: 0.5
+  pids_limit: 50
+  
+  enable_cache: false
+  
+  # Minimal environment variables
+  env_whitelist:
+    - HOME
+    - USER
+    - PATH
+    - TERM
+    - LANG
+    - LC_ALL
+    - PWD
+  
+  enable_metrics: true
+  log_output: true
+```
+</Accordion>
+
+## Choosing a Preset
+
+<Tabs>
+  <Tab title="By Use Case">
+    | Use Case | Preset | Guard Level | Sandbox Mode |
+    |----------|--------|-------------|-------------|
+    | Local development | `developer.yaml` | auto | auto |
+    | Fast local dev | `dev-fast.yaml` | high | auto |
+    | CI/CD pipeline | `ci-cd.yaml` | high | always |
+    | CI optimization | `ci-optimized.yaml` | paranoid | always |
+    | Production | `production.yaml` | paranoid | always |
+    | Zero-trust prod | `production-secure.yaml` | paranoid | always |
+  </Tab>
+  
+  <Tab title="By Performance">
+    | Preset | Performance | Security | Best For |
+    |--------|------------|----------|----------|
+    | `dev-fast.yaml` | ⚡️⚡️⚡️⚡️⚡️ | 🛡️🛡️🛡️ | Native speed |
+    | `developer.yaml` | ⚡️⚡️⚡️⚡️ | 🛡️🛡️ | Local dev |
+    | `ci-cd.yaml` | ⚡️⚡️⚡️ | 🛡️🛡️🛡️🛡️ | Automated builds |
+    | `production.yaml` | ⚡️⚡️ | 🛡️🛡️🛡️🛡️🛡️ | Production |
+    | `production-secure.yaml` | ⚡️ | 🛡️🛡️🛡️🛡️🛡️ | Zero-trust |
+  </Tab>
+  
+  <Tab title="By Environment">
+    **Development:**
+    - `developer.yaml` - Balanced
+    - `dev-fast.yaml` - Maximum performance
+    
+    **Staging:**
+    - `ci-cd.yaml` - Good for pre-prod testing
+    
+    **Production:**
+    - `production.yaml` - Standard production
+    - `production-secure.yaml` - Maximum security
+    
+    **CI/CD:**
+    - `ci-cd.yaml` - General purpose
+    - `ci-optimized.yaml` - Maximum consistency
+  </Tab>
+</Tabs>
+
+## Customizing Presets
+
+You can customize any preset by copying it and modifying values:
+
+```bash
+# Copy a preset
+cp developer.yaml vectra-guard.yaml
+
+# Edit to your needs
+vim vectra-guard.yaml
+
+# Test your changes
+vg validate vectra-guard.yaml
+vg explain "test command"
+```
+
+<CardGroup cols={2}>
+  <Card title="Guard Levels" icon="shield" href="/configuration/guard-levels">
+    Learn about auto-detection and protection levels
+  </Card>
+  
+  <Card title="Sandbox Config" icon="box" href="/configuration/sandbox-config">
+    Deep dive into sandbox modes and security levels
+  </Card>
+</CardGroup>

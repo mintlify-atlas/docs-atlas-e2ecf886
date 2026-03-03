@@ -1,0 +1,484 @@
+---
+title: Installation
+description: Install Vectra Guard on macOS, Linux, or Windows
+---
+
+# Installation
+
+Install Vectra Guard on your system with a one-line command or from source.
+
+## Prerequisites
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    - `curl` or `wget` (for downloading the installer)
+    - `bash` shell (for running the installer)
+    
+    Most systems have these installed by default.
+  </Tab>
+  
+  <Tab title="Windows">
+    - PowerShell 5.1 or later
+    - Windows 10 or later
+    
+    PowerShell is included with Windows by default.
+  </Tab>
+  
+  <Tab title="From source">
+    - `git` (for cloning the repository)
+    - Go 1.21 or later
+    - `bash` shell (Unix) or PowerShell (Windows)
+  </Tab>
+</Tabs>
+
+## Quick install
+
+<Note>
+  The installer defaults to user-space installation (no admin/sudo required).
+</Note>
+
+<CodeGroup>
+```bash macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+```
+
+```powershell Windows
+irm https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/scripts/install-windows.ps1 | iex
+```
+</CodeGroup>
+
+### What the installer does
+
+<Steps>
+  <Step title="Detects your system">
+    Automatically detects your OS (macOS, Linux, Windows) and architecture (x86_64, arm64).
+  </Step>
+  
+  <Step title="Downloads the binary">
+    Downloads the latest pre-built release binary from GitHub.
+  </Step>
+  
+  <Step title="Verifies the download">
+    Performs checksum verification to ensure the binary hasn't been tampered with.
+  </Step>
+  
+  <Step title="Installs to user-space">
+    **Unix:** Installs to `$HOME/.local/bin`
+    
+    **Windows:** Installs to `%LOCALAPPDATA%\VectraGuard`
+  </Step>
+  
+  <Step title="Updates PATH">
+    Adds the install directory to your PATH in shell configuration files (`~/.zshrc`, `~/.bashrc`, `~/.profile`).
+  </Step>
+  
+  <Step title="Creates aliases">
+    Sets up convenient aliases:
+    - `vg` → `vectra-guard`
+    - `vectraguard` → `vectra-guard`
+  </Step>
+</Steps>
+
+## Verify installation
+
+After installation, verify Vectra Guard is available:
+
+```bash
+vectra-guard --help
+```
+
+**Expected output:**
+```
+Vectra Guard - Security guard for AI coding agents & development workflows
+
+Usage:
+  vectra-guard [command]
+
+Available Commands:
+  exec        Execute a command with protection
+  validate    Validate a script for security risks
+  explain     Explain security risks in a script
+  session     Manage sessions
+  audit       Audit commands and sessions
+  cve         CVE scanning commands
+  ...
+```
+
+Check the version:
+```bash
+vectra-guard version
+```
+
+Verify the location:
+```bash
+which vectra-guard
+```
+
+**Expected output (Unix):**
+```
+/Users/yourname/.local/bin/vectra-guard
+```
+
+## Installation methods
+
+### One-line install (recommended)
+
+This is the fastest and easiest method for most users.
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+    ```
+    
+    **What gets installed:**
+    - Binary: `$HOME/.local/bin/vectra-guard`
+    - Aliases: `vg`, `vectraguard`
+    - PATH updated in: `~/.zshrc`, `~/.bashrc`, `~/.profile`
+  </Tab>
+  
+  <Tab title="Windows">
+    ```powershell
+    irm https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/scripts/install-windows.ps1 | iex
+    ```
+    
+    **What gets installed:**
+    - Binary: `%LOCALAPPDATA%\VectraGuard\vectra-guard.exe`
+    - Aliases: `vg`, `vectraguard`
+    - PATH updated automatically
+    
+    **For CI/non-interactive installs:**
+    ```powershell
+    $env:VECTRAGUARD_YES = '1'
+    irm https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/scripts/install-windows.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
+
+### Full setup (dependencies + tool)
+
+Installs Vectra Guard and common dependencies:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/scripts/install-all.sh | bash
+```
+
+### From source
+
+Build the latest version from source:
+
+```bash
+# Clone the repository
+git clone https://github.com/xadnavyaai/vectra-guard.git
+cd vectra-guard
+
+# Build the binary
+go build -o vectra-guard .
+
+# Move to PATH
+mv vectra-guard ~/.local/bin/
+```
+
+### Go install
+
+For Go developers:
+
+```bash
+go install github.com/xadnavyaai/vectra-guard@latest
+```
+
+<Note>
+  This builds from source and requires Go 1.21 or later.
+</Note>
+
+### Custom install directory
+
+Install to a custom directory:
+
+```bash
+INSTALL_DIR="/custom/path" curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+```
+
+## Post-installation setup
+
+### Initialize configuration
+
+Create a global configuration file:
+
+```bash
+vectra-guard init
+```
+
+This creates `~/.config/vectra-guard/config.yaml` with default settings.
+
+**Or** create a local configuration for a specific project:
+
+```bash
+cd ~/my-project
+vectra-guard init --local
+```
+
+This creates `.vectra-guard/config.yaml` in your project directory.
+
+### Enable shell tracker (optional)
+
+The shell tracker automatically logs all commands:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/scripts/install-shell-tracker.sh | bash
+```
+
+**What it does:**
+- Adds a lightweight hook to your shell
+- Automatically starts sessions
+- Logs all commands (not just those run with `vg exec`)
+- Works in Cursor, VSCode, Terminal, and SSH sessions
+
+### Set up aliases (if not automatic)
+
+If the installer didn't add aliases automatically:
+
+```bash
+# Add to ~/.zshrc or ~/.bashrc
+echo 'alias vg="vectra-guard"' >> ~/.zshrc
+echo 'alias vectraguard="vectra-guard"' >> ~/.zshrc
+
+# Reload shell configuration
+source ~/.zshrc
+```
+
+## Verify setup
+
+<Steps>
+  <Step title="Test the command">
+    ```bash
+    vg --help
+    ```
+    
+    Should display the help message.
+  </Step>
+  
+  <Step title="Check PATH">
+    ```bash
+    echo $PATH | grep -o "$HOME/.local/bin"
+    ```
+    
+    Should output: `$HOME/.local/bin`
+  </Step>
+  
+  <Step title="Run a test command">
+    ```bash
+    vg exec -- echo "Installation successful!"
+    ```
+    
+    Should output: `Installation successful!`
+  </Step>
+</Steps>
+
+## Upgrade
+
+Upgrade to the latest version by re-running the installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+```
+
+The installer will detect the existing installation and prompt to upgrade.
+
+## Uninstall
+
+### Interactive uninstall
+
+Run the uninstall script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/scripts/uninstall.sh | bash
+```
+
+This will:
+- Remove the binary
+- Remove shell integration
+- Optionally remove data (`~/.vectra-guard`)
+
+### Manual uninstall
+
+Remove files manually:
+
+```bash
+# Remove the binary
+rm -f ~/.local/bin/vectra-guard
+
+# Remove data (optional)
+rm -rf ~/.vectra-guard
+
+# Remove configuration (optional)
+rm -rf ~/.config/vectra-guard
+
+# Remove aliases from shell config
+# Edit ~/.zshrc, ~/.bashrc, and remove Vectra Guard section
+```
+
+## Troubleshooting
+
+<Accordion title="Command not found: vectra-guard">
+  **Problem:** The `vectra-guard` command is not found after installation.
+  
+  **Solution:**
+  
+  1. Verify the binary exists:
+     ```bash
+     ls -l ~/.local/bin/vectra-guard
+     ```
+  
+  2. Check if `~/.local/bin` is in your PATH:
+     ```bash
+     echo $PATH | grep -o "$HOME/.local/bin"
+     ```
+  
+  3. Add to PATH manually:
+     ```bash
+     export PATH="$PATH:$HOME/.local/bin"
+     ```
+  
+  4. Add to shell config permanently:
+     ```bash
+     echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.zshrc
+     source ~/.zshrc
+     ```
+</Accordion>
+
+<Accordion title="Permission denied when installing">
+  **Problem:** Installation fails with permission errors.
+  
+  **Solution:**
+  
+  1. Don't use `sudo` - the installer uses user-space by default:
+     ```bash
+     # Wrong
+     sudo curl -fsSL ... | bash
+     
+     # Right
+     curl -fsSL ... | bash
+     ```
+  
+  2. If installing to a custom directory, ensure you have write access:
+     ```bash
+     INSTALL_DIR="$HOME/bin" curl -fsSL ... | bash
+     ```
+</Accordion>
+
+<Accordion title="Checksum verification failed">
+  **Problem:** The installer reports checksum verification failure.
+  
+  **Solution:**
+  
+  1. This usually indicates a download issue. Try again:
+     ```bash
+     curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+     ```
+  
+  2. Check your internet connection.
+  
+  3. If the problem persists, install from source:
+     ```bash
+     git clone https://github.com/xadnavyaai/vectra-guard.git
+     cd vectra-guard
+     go build -o vectra-guard .
+     mv vectra-guard ~/.local/bin/
+     ```
+</Accordion>
+
+<Accordion title="Windows: PowerShell execution policy error">
+  **Problem:** PowerShell blocks script execution.
+  
+  **Solution:**
+  
+  1. Run PowerShell as Administrator
+  
+  2. Set execution policy:
+     ```powershell
+     Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+     ```
+  
+  3. Run the installer again:
+     ```powershell
+     irm https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/scripts/install-windows.ps1 | iex
+     ```
+</Accordion>
+
+<Accordion title="Aliases not working">
+  **Problem:** `vg` command doesn't work.
+  
+  **Solution:**
+  
+  1. Check if alias exists:
+     ```bash
+     alias | grep vg
+     ```
+  
+  2. Add alias manually:
+     ```bash
+     echo 'alias vg="vectra-guard"' >> ~/.zshrc
+     source ~/.zshrc
+     ```
+  
+  3. Make sure you're using the correct shell config file:
+     - **zsh:** `~/.zshrc`
+     - **bash:** `~/.bashrc`
+     - **fish:** `~/.config/fish/config.fish`
+</Accordion>
+
+<Accordion title="Installation fails on ARM64 (Apple Silicon)">
+  **Problem:** No binary found for your architecture.
+  
+  **Solution:**
+  
+  1. The installer should auto-detect ARM64. Verify:
+     ```bash
+     uname -m
+     # Should output: arm64
+     ```
+  
+  2. If auto-detection fails, install from source:
+     ```bash
+     git clone https://github.com/xadnavyaai/vectra-guard.git
+     cd vectra-guard
+     GOARCH=arm64 go build -o vectra-guard .
+     mv vectra-guard ~/.local/bin/
+     ```
+</Accordion>
+
+## Platform-specific notes
+
+### macOS
+
+- **Apple Silicon (M1/M2/M3):** Fully supported with native ARM64 binaries
+- **Intel Macs:** Fully supported with x86_64 binaries
+- **Minimum version:** macOS 10.15 (Catalina) or later
+- **Install location:** `$HOME/.local/bin`
+
+### Linux
+
+- **Distributions:** All major distributions supported (Ubuntu, Debian, Fedora, CentOS, Arch, etc.)
+- **Architectures:** x86_64, arm64
+- **Install location:** `$HOME/.local/bin`
+- **Note:** Ensure `~/.local/bin` is in your PATH
+
+### Windows
+
+- **Minimum version:** Windows 10 or later
+- **PowerShell:** 5.1 or later (included with Windows)
+- **Architectures:** x86_64, arm64
+- **Install location:** `%LOCALAPPDATA%\VectraGuard`
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Run your first protected command
+  </Card>
+  
+  <Card title="Configuration" icon="sliders" href="/configuration">
+    Configure Vectra Guard for your workflow
+  </Card>
+</CardGroup>

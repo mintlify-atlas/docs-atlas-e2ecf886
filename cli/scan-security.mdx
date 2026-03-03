@@ -1,0 +1,148 @@
+---
+title: "vg scan-security"
+description: "Scan source code for risky patterns and security vulnerabilities"
+---
+
+## Syntax
+
+```bash
+vectra-guard scan-security [--path <dir>] [--languages <list>]
+vg scan-security [--path <dir>] [--languages <list>]
+```
+
+## Description
+
+Static security analysis for source code. Detects risky patterns, dangerous functions, and security misconfigurations across multiple languages.
+
+## Options
+
+<ParamField path="--path" type="string" default=".">
+  Target directory or file to scan
+</ParamField>
+
+<ParamField path="--languages" type="string">
+  Comma-separated list of languages to scan: `go`, `python`, `c`, `config`. Default: scans all detected languages. Use `config` for YAML/JSON deployment security checks.
+</ParamField>
+
+## Exit Codes
+
+- **0**: No security issues detected
+- **2**: Security issues found (fails in CI/CD)
+
+## Examples
+
+### Scan all code
+
+```bash
+vg scan-security
+# Scans current directory for all supported languages
+```
+
+### Scan specific languages
+
+```bash
+vg scan-security --languages go,python
+# Only scans Go and Python files
+```
+
+### Include configuration checks
+
+```bash
+vg scan-security --languages go,python,config
+# Also checks YAML/JSON for deployment misconfigs
+```
+
+### Scan specific directory
+
+```bash
+vg scan-security --path ./api --languages python
+# Output:
+# ⚠ SECURITY FINDING
+# File: api/auth.py
+# Line: 45
+# Language: python
+# Severity: high
+# Code: PY_SUBPROCESS
+# Description: subprocess.call with shell=True allows command injection
+```
+
+### CI/CD integration
+
+```yaml
+# .github/workflows/security.yml
+name: Code Security Scan
+on: [push, pull_request]
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Vectra Guard
+        run: curl -fsSL https://raw.githubusercontent.com/xadnavyaai/vectra-guard/main/install.sh | bash
+      - name: Security scan
+        run: vg scan-security --languages go,python,config
+```
+
+### JSON output for reporting
+
+```bash
+vg --output json scan-security | jq '.[] | select(.severity=="critical" or .severity=="high")'
+# Extract high-severity findings
+```
+
+## Detection Coverage
+
+### Python (`python`)
+
+- **PY_ENV_ACCESS**: Reading environment variables with secrets
+- **PY_SUBPROCESS**: `subprocess.call` with `shell=True`
+- **PY_EVAL**: Use of `eval()` with untrusted input
+- **PY_EXEC**: Use of `exec()` with dynamic code
+- **PY_REMOTE_HTTP**: HTTP requests to external endpoints
+- **PY_EXTERNAL_HTTP**: Non-localhost HTTP (SSRF risk)
+
+### Go (`go`)
+
+- **GO_EXEC_COMMAND**: `exec.Command` with potential injection
+- **GO_DANGEROUS_SHELL**: Shell command execution patterns
+- **GO_NET_HTTP**: External HTTP calls
+- **GO_ENV_READ**: Environment variable access
+- **GO_SYSTEM_WRITE**: Writing to system directories
+- **GO_EXTERNAL_HTTP**: Non-localhost HTTP (SSRF risk)
+
+### C/C++ (`c`)
+
+- **C_SHELL_EXEC**: `system()`, `popen()`, `exec*()` usage
+- **C_GETS**: Unsafe `gets()` function (buffer overflow)
+- **C_UNSAFE_STRING**: `strcpy`, `strcat` without bounds checking
+- **C_MEMCPY**: Unbounded `memcpy` operations
+- **C_RAW_SOCKET**: Raw socket operations
+
+### Configuration (`config`)
+
+- **BIND_ALL_INTERFACES**: Service binds to `0.0.0.0` (security risk)
+- **TRUST_PROXY_ENABLED**: Express trust-proxy without auth
+- **AUTH_DISABLED**: Authentication explicitly disabled
+- **DEBUG_MODE_PROD**: Debug mode in production configs
+
+## Remediation Guidance
+
+Each finding includes:
+- **Code**: Unique identifier (e.g., `PY_SUBPROCESS`)
+- **Severity**: `critical`, `high`, `medium`, `low`
+- **Description**: What was detected
+- **Recommendation**: How to fix it
+
+Example:
+```
+Code: PY_SUBPROCESS
+Severity: high
+Description: subprocess.call with shell=True allows command injection
+Recommendation: Use shell=False and pass arguments as a list
+```
+
+## Related Commands
+
+- [scan-secrets](/cli/scan-secrets) - Scan for exposed secrets
+- [audit repo](/cli/audit#audit-repo) - Full repository audit (includes code scan)
+- [validate](/cli/validate) - Validate shell scripts

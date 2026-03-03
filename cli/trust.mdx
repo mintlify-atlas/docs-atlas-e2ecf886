@@ -1,0 +1,166 @@
+---
+title: "vg trust"
+description: "Manage trusted commands to skip sandbox and approval prompts"
+---
+
+## Syntax
+
+```bash
+vectra-guard trust <subcommand> [options]
+vg trust <subcommand> [options]
+```
+
+## Description
+
+Manage a trust store of pre-approved commands. Trusted commands skip sandboxing and approval prompts, improving performance for known-safe operations.
+
+## Subcommands
+
+### trust list
+
+List all trusted commands.
+
+```bash
+vg trust list
+```
+
+**Output**: Table showing command, approval date, use count, last used, and expiration.
+
+### trust add
+
+Add a command to the trust store.
+
+```bash
+vg trust add <command> [--note <text>] [--duration <time>]
+```
+
+**Arguments**:
+- `command`: The exact command string to trust (e.g., `npm install express`)
+
+<ParamField path="--note" type="string">
+  Optional note explaining why this command is trusted
+</ParamField>
+
+<ParamField path="--duration" type="string">
+  Trust duration (e.g., `24h`, `7d`, `30d`). Default: permanent (never expires)
+</ParamField>
+
+### trust remove
+
+Remove a command from the trust store.
+
+```bash
+vg trust remove <command>
+```
+
+**Arguments**:
+- `command`: The exact command string to remove
+
+### trust clean
+
+Remove all expired entries from the trust store.
+
+```bash
+vg trust clean
+```
+
+## Examples
+
+### Add commonly used commands
+
+```bash
+vg trust add "npm install" --note "Safe package manager"
+vg trust add "npm test" --note "Test suite"
+vg trust add "git status" --note "Read-only git command"
+# ✅ Commands trusted
+```
+
+### Temporary trust with expiration
+
+```bash
+vg trust add "npm install debug" --duration 7d --note "Testing debug package"
+# Trusted for 7 days only
+```
+
+### List trusted commands
+
+```bash
+vg trust list
+# COMMAND              APPROVED    USE COUNT  LAST USED         EXPIRES
+# npm install         2026-03-01  15         2026-03-03 10:30  Never
+# npm test            2026-03-01  8          2026-03-03 09:15  Never
+# npm install debug   2026-03-03  2          2026-03-03 11:00  2026-03-10
+```
+
+### Interactive approval with remember
+
+```bash
+vg exec --interactive -- npm install lodash
+# ⚠️  Command requires approval
+# Command: npm install lodash
+# Risk Level: MEDIUM
+#
+# Options:
+#   y  - Yes, run once
+#   r  - Yes, and remember (trust permanently)
+#   n  - No, cancel
+#
+# Choose [y/r/N]: r
+# ✅ Approved and remembered
+```
+
+### Remove trust
+
+```bash
+vg trust remove "npm install debug"
+# ✅ Removed command from trust store: npm install debug
+```
+
+### Clean expired entries
+
+```bash
+vg trust clean
+# ✅ Cleaned expired entries from trust store
+```
+
+### Bulk trust for CI
+
+```bash
+#!/bin/bash
+# Trust common CI commands
+COMMANDS=(
+  "npm ci"
+  "npm run build"
+  "npm run test"
+  "npm run lint"
+)
+
+for cmd in "${COMMANDS[@]}"; do
+  vg trust add "$cmd" --note "CI pipeline"
+done
+```
+
+## Trust Store Location
+
+Trusted commands are stored in:
+```
+~/.vectra-guard/trust-store.json
+```
+
+Or configure via:
+```yaml
+sandbox:
+  trust_store_path: /custom/path/trust-store.json
+```
+
+## Security Considerations
+
+- **Exact match only**: Trust is command-specific. `npm install` ≠ `npm install lodash`
+- **No wildcards**: Cannot trust patterns like `npm install *`
+- **Sandbox bypass**: Trusted commands skip sandbox (ensure they're actually safe)
+- **Critical commands**: Commands like `rm -rf /` cannot be trusted (hard-blocked)
+
+## Related Commands
+
+- [exec](/cli/exec) - Execute commands (respects trust store)
+- [validate](/cli/validate) - Validate before trusting

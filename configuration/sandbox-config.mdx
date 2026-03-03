@@ -1,0 +1,671 @@
+---
+title: 'Sandbox Configuration'
+description: 'Configure sandbox modes, security levels, caching, and network isolation'
+---
+
+## Overview
+
+Vectra Guard's sandbox provides isolated execution environments for commands, protecting your system from potentially harmful operations. The sandbox system is highly configurable with multiple modes, security levels, and performance optimizations.
+
+<Note>
+By default, Vectra Guard runs **all commands in sandbox** with intelligent caching for 10x speedup.
+</Note>
+
+## Sandbox Modes
+
+The `sandbox.mode` setting controls **when** commands are sandboxed:
+
+<Tabs>
+  <Tab title="always">
+    **Maximum Security (Default)**
+    
+    ```yaml
+    sandbox:
+      enabled: true
+      mode: always  # All commands sandboxed
+    ```
+    
+    **Behavior:**
+    - ✅ Every command runs in sandbox
+    - ✅ Maximum security and isolation
+    - ✅ 10x faster with comprehensive caching
+    - ✅ 30+ package manager caches auto-mounted
+    
+    **Best for:**
+    - Production environments
+    - CI/CD pipelines
+    - Untrusted code execution
+    - Maximum protection
+  </Tab>
+  
+  <Tab title="auto">
+    **Smart Sandboxing**
+    
+    ```yaml
+    sandbox:
+      enabled: true
+      mode: auto  # Only risky commands
+    ```
+    
+    **Behavior:**
+    - Safe commands → Run on host
+    - Medium/High risk → Run in sandbox
+    - Auto-detects package installs, builds, etc.
+    
+    **Best for:**
+    - Local development
+    - Balanced security/performance
+    - Trusted codebases
+    
+    **Examples:**
+    ```bash
+    vg exec "ls"              # Host (safe)
+    vg exec "npm install"     # Sandbox (risky)
+    vg exec "pip install pkg" # Sandbox (risky)
+    vg exec "git status"      # Host (safe)
+    vg exec "curl | sh"       # Sandbox (dangerous)
+    ```
+  </Tab>
+  
+  <Tab title="risky">
+    **Only High-Risk Commands**
+    
+    ```yaml
+    sandbox:
+      enabled: true
+      mode: risky  # Only high/critical risk
+    ```
+    
+    **Behavior:**
+    - Low/Medium risk → Run on host
+    - High/Critical risk → Run in sandbox
+    - Less aggressive than `auto`
+    
+    **Best for:**
+    - Environments with minimal overhead requirements
+    - Trusted development teams
+  </Tab>
+  
+  <Tab title="never">
+    **Sandbox Disabled**
+    
+    ```yaml
+    sandbox:
+      enabled: true
+      mode: never  # Never sandbox
+    ```
+    
+    **Behavior:**
+    - All commands run on host
+    - **Except:** Critical commands (e.g., `rm -rf /`) still blocked
+    - No isolation or protection
+    
+    <Warning>
+    Only use this mode for testing or in completely trusted environments.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Security Levels
+
+The `sandbox.security_level` setting controls **how strict** the sandbox isolation is:
+
+<CardGroup cols={2}>
+  <Card title="permissive" icon="unlock">
+    **Fastest Performance**
+    
+    - Shares host network
+    - Standard capabilities
+    - Minimal restrictions
+    - Best for trusted local dev
+  </Card>
+  
+  <Card title="balanced" icon="scale-balanced">
+    **Recommended Default**
+    
+    - Own network namespace
+    - Outbound network allowed
+    - Standard capabilities
+    - Good isolation + usability
+  </Card>
+  
+  <Card title="strict" icon="shield">
+    **Strong Isolation**
+    
+    - Restricted network access
+    - Dropped capabilities
+    - Read/write restrictions
+    - For sensitive operations
+  </Card>
+  
+  <Card title="paranoid" icon="lock">
+    **Maximum Security**
+    
+    - No network access
+    - Read-only root filesystem
+    - All capabilities dropped
+    - Production environments
+  </Card>
+</CardGroup>
+
+### Security Level Comparison
+
+<Tabs>
+  <Tab title="Configuration">
+    ```yaml permissive
+    sandbox:
+      security_level: permissive
+      # Fast, shares host network
+    ```
+    
+    ```yaml balanced (Recommended)
+    sandbox:
+      security_level: balanced
+      # Good isolation, allows outbound network
+    ```
+    
+    ```yaml strict
+    sandbox:
+      security_level: strict
+      # Stronger isolation, limited capabilities
+    ```
+    
+    ```yaml paranoid
+    sandbox:
+      security_level: paranoid
+      # No network, read-only root, minimal caps
+    ```
+  </Tab>
+  
+  <Tab title="Capabilities">
+    | Feature | permissive | balanced | strict | paranoid |
+    |---------|------------|----------|--------|----------|
+    | Network | Full | Outbound | Restricted | None |
+    | Filesystem | Read/Write | Read/Write | Restricted | Read-only |
+    | Capabilities | Standard | Standard | Dropped | All dropped |
+    | Performance | ⚡️⚡️⚡️⚡️⚡️ | ⚡️⚡️⚡️⚡️ | ⚡️⚡️⚡️ | ⚡️⚡️ |
+    | Security | 🛡️ | 🛡️🛡️🛡️ | 🛡️🛡️🛡️🛡️ | 🛡️🛡️🛡️🛡️🛡️ |
+  </Tab>
+</Tabs>
+
+## Cache Configuration
+
+Caching dramatically improves performance by sharing package manager caches between sandbox and host.
+
+### Enable Caching (Default)
+
+```yaml
+sandbox:
+  enable_cache: true  # 10x faster subsequent runs
+```
+
+**Auto-detected cache directories:**
+
+<Accordion title="Node.js / JavaScript">
+- `~/.npm` - npm cache
+- `~/.yarn` - Yarn cache  
+- `~/.pnpm` - pnpm cache
+- `node_modules/.cache` - Build caches
+</Accordion>
+
+<Accordion title="Python">
+- `~/.cache/pip` - pip cache
+- `~/.cache/pip3` - pip3 cache
+- `__pycache__` - Python bytecode
+</Accordion>
+
+<Accordion title="Rust">
+- `~/.cargo` - Cargo registry
+- `~/.rustup` - Rust toolchains
+- `target/` - Build artifacts
+</Accordion>
+
+<Accordion title="Go">
+- `~/go/pkg` - Go packages
+- `~/.cache/go-build` - Go build cache
+</Accordion>
+
+<Accordion title="Java">
+- `~/.m2` - Maven cache
+- `~/.gradle` - Gradle cache
+</Accordion>
+
+<Accordion title="Ruby">
+- `~/.gem` - Gem cache
+- `vendor/bundle` - Bundler cache
+</Accordion>
+
+<Accordion title="PHP">
+- `~/.cache/composer` - Composer cache
+</Accordion>
+
+<Accordion title="Other">
+- `~/.cache/nuget` - NuGet (.NET)
+- `~/.cache/bazel` - Bazel build cache
+- `~/.ccache` - C/C++ compiler cache
+</Accordion>
+
+### Custom Cache Directories
+
+Add your own cache directories:
+
+```yaml
+sandbox:
+  enable_cache: true
+  cache_dirs:
+    - ~/.npm
+    - ~/.cargo
+    - ~/custom-cache
+    - /opt/company-cache
+```
+
+<Tip>
+Vectra Guard automatically mounts these directories with read/write access inside the sandbox.
+</Tip>
+
+### Disable Caching
+
+```yaml
+sandbox:
+  enable_cache: false  # For maximum reproducibility
+```
+
+<Warning>
+Disabling cache significantly slows down package installs but ensures completely clean builds.
+</Warning>
+
+## Network Modes
+
+Control network access for sandboxed commands:
+
+<CodeGroup>
+```yaml restricted (Default)
+sandbox:
+  network_mode: restricted  # Allow outbound, block inbound
+  allow_network: true
+```
+
+```yaml full
+sandbox:
+  network_mode: full  # No restrictions
+  allow_network: true
+```
+
+```yaml none
+sandbox:
+  network_mode: none  # Completely offline
+  allow_network: false
+```
+</CodeGroup>
+
+<Tabs>
+  <Tab title="restricted">
+    **Recommended for most use cases**
+    
+    **Allows:**
+    - ✅ Outbound connections (download packages)
+    - ✅ DNS resolution
+    - ✅ HTTPS/HTTP requests
+    
+    **Blocks:**
+    - ❌ Inbound connections
+    - ❌ Port listening
+    - ❌ Network sniffing
+    
+    **Best for:**
+    - Package installations
+    - CI/CD builds
+    - Development environments
+  </Tab>
+  
+  <Tab title="full">
+    **Full network access**
+    
+    **Allows:**
+    - ✅ All network operations
+    - ✅ Listening on ports
+    - ✅ Inbound/outbound connections
+    
+    **Best for:**
+    - Running web servers in sandbox
+    - Testing network applications
+    - Database connections
+  </Tab>
+  
+  <Tab title="none">
+    **Completely offline**
+    
+    **Blocks:**
+    - ❌ All network access
+    - ❌ DNS resolution
+    - ❌ Any outbound connections
+    
+    **Best for:**
+    - Production deployments
+    - Maximum security
+    - Air-gapped environments
+    
+    <Note>
+    Requires all dependencies to be pre-cached or vendored.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Runtime Selection
+
+Vectra Guard supports multiple sandbox runtimes:
+
+```yaml
+sandbox:
+  runtime: auto  # Auto-detect best available
+```
+
+<Tabs>
+  <Tab title="auto (Recommended)">
+    Automatically selects the best available runtime:
+    
+    1. **Bubblewrap** (fastest, native performance)
+    2. **Docker** (most compatible)
+    3. **Podman** (rootless alternative to Docker)
+    4. **Namespace** (fallback, basic isolation)
+    
+    ```yaml
+    sandbox:
+      runtime: auto
+      auto_detect_env: true  # Detect dev environment
+      prefer_fast: true      # Prefer fast runtimes
+    ```
+  </Tab>
+  
+  <Tab title="docker">
+    Use Docker containers for sandboxing:
+    
+    ```yaml
+    sandbox:
+      runtime: docker
+      image: ubuntu:22.04
+      timeout: 600  # 10 minutes
+    ```
+    
+    **Pros:**
+    - Most compatible
+    - Works on all platforms
+    - Strong isolation
+    
+    **Cons:**
+    - Slower startup
+    - Requires Docker daemon
+  </Tab>
+  
+  <Tab title="bubblewrap">
+    Use Linux namespaces (fastest):
+    
+    ```yaml
+    sandbox:
+      runtime: bubblewrap
+      use_overlayfs: true  # Isolate /tmp
+    ```
+    
+    **Pros:**
+    - Native performance
+    - Near-instant startup
+    - No Docker required
+    
+    **Cons:**
+    - Linux-only
+    - Requires bubblewrap installed
+    
+    **Installation:**
+    ```bash
+    sudo apt install bubblewrap  # Ubuntu/Debian
+    sudo dnf install bubblewrap  # Fedora
+    ```
+  </Tab>
+  
+  <Tab title="podman">
+    Use Podman (rootless containers):
+    
+    ```yaml
+    sandbox:
+      runtime: podman
+      image: ubuntu:22.04
+    ```
+    
+    **Pros:**
+    - Rootless execution
+    - Docker-compatible
+    - More secure than Docker
+    
+    **Cons:**
+    - Slightly slower than Docker
+    - Less common
+  </Tab>
+</Tabs>
+
+## Advanced Options
+
+### Resource Limits
+
+Control CPU, memory, and process limits:
+
+```yaml
+sandbox:
+  # Memory limits
+  memory_limit: 512m     # 512 megabytes
+  
+  # CPU limits
+  cpu_limit: 0.5         # 50% of one core
+  
+  # Process limits
+  pids_limit: 50         # Maximum 50 processes
+  
+  # Timeout
+  timeout: 600           # 10 minutes
+```
+
+### Seccomp Profiles
+
+Filter dangerous system calls:
+
+```yaml
+sandbox:
+  seccomp_profile: strict  # moderate, strict, custom
+  # Or custom profile path:
+  # seccomp_profile: /path/to/seccomp-profile.json
+```
+
+<Accordion title="Seccomp Levels">
+**moderate:**
+- Blocks fork bombs
+- Blocks kernel module loading
+- Allows most development operations
+
+**strict:**
+- Blocks all dangerous syscalls
+- Restricts ptrace, perf_event_open
+- Production-ready filtering
+
+**custom:**
+- Provide your own JSON profile
+- Full control over allowed syscalls
+</Accordion>
+
+### Capability Management
+
+Drop Linux capabilities for enhanced security:
+
+```yaml
+sandbox:
+  capability_set: minimal  # none, minimal, standard
+  
+  # Or specify exact capabilities:
+  drop_capabilities:
+    - CAP_SYS_ADMIN
+    - CAP_NET_ADMIN
+    - CAP_SYS_MODULE
+```
+
+### Environment Variables
+
+Control which environment variables pass through to sandbox:
+
+```yaml
+sandbox:
+  env_whitelist:
+    - HOME
+    - USER
+    - PATH
+    - SHELL
+    - TERM
+    - NODE_ENV
+    - NPM_TOKEN
+    - GITHUB_TOKEN
+```
+
+### Read-Only Root Filesystem
+
+Mount root filesystem as read-only:
+
+```yaml
+sandbox:
+  read_only_root: true  # Maximum security
+```
+
+<Warning>
+This prevents any filesystem modifications outside mounted volumes. Use with caution.
+</Warning>
+
+## Complete Example
+
+A production-grade sandbox configuration:
+
+```yaml vectra-guard.yaml
+guard_level:
+  level: paranoid
+
+sandbox:
+  enabled: true
+  mode: always
+  security_level: paranoid
+  
+  # Runtime
+  runtime: docker
+  image: ubuntu:22.04
+  timeout: 600
+  
+  # Network
+  network_mode: none
+  allow_network: false
+  
+  # Security
+  read_only_root: true
+  seccomp_profile: strict
+  capability_set: none
+  
+  # Resources
+  memory_limit: 512m
+  cpu_limit: 0.5
+  pids_limit: 50
+  
+  # Performance
+  enable_cache: false  # For reproducibility
+  
+  # Environment
+  env_whitelist:
+    - HOME
+    - USER
+    - PATH
+  
+  # Observability
+  enable_metrics: true
+  log_output: true
+  show_runtime_info: true
+```
+
+## Disabling Sandbox
+
+If you need to disable sandboxing:
+
+<CodeGroup>
+```yaml Option 1: Disable Completely
+sandbox:
+  enabled: false
+```
+
+```yaml Option 2: Never Mode
+sandbox:
+  enabled: true
+  mode: never  # Never sandbox (except critical)
+```
+
+```bash Option 3: Environment Variable
+VECTRA_SANDBOX_MODE=never vg exec npm install
+```
+</CodeGroup>
+
+<Warning>
+Critical commands (like `rm -rf /`) **cannot be bypassed** even with sandbox disabled.
+</Warning>
+
+## Performance Tips
+
+<CardGroup cols={2}>
+  <Card title="Enable Caching" icon="bolt">
+    Use `enable_cache: true` for 10x speedup on package installs
+  </Card>
+  
+  <Card title="Use Bubblewrap" icon="rocket">
+    Install bubblewrap for native performance on Linux
+  </Card>
+  
+  <Card title="Permissive Level" icon="gauge-high">
+    Use `security_level: permissive` for local dev
+  </Card>
+  
+  <Card title="Auto Mode" icon="wand-magic-sparkles">
+    Use `mode: auto` to sandbox only risky commands
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<Accordion title="Sandbox is too slow">
+**Solutions:**
+1. Enable caching: `enable_cache: true`
+2. Use bubblewrap runtime: `runtime: auto`
+3. Lower security level: `security_level: balanced`
+4. Use auto mode: `mode: auto`
+</Accordion>
+
+<Accordion title="Network access blocked">
+**Solutions:**
+1. Change network mode: `network_mode: restricted`
+2. Enable network: `allow_network: true`
+3. Check security level (paranoid blocks network)
+</Accordion>
+
+<Accordion title="Permission denied errors">
+**Solutions:**
+1. Disable read-only root: `read_only_root: false`
+2. Lower security level: `security_level: balanced`
+3. Add cache directories to `cache_dirs`
+</Accordion>
+
+<Accordion title="Docker daemon not available">
+**Solutions:**
+1. Install Docker or Podman
+2. Use bubblewrap: `runtime: bubblewrap`
+3. Use auto-detection: `runtime: auto`
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Guard Levels" icon="shield" href="/configuration/guard-levels">
+    Configure auto-detection and protection levels
+  </Card>
+  
+  <Card title="Presets" icon="copy" href="/configuration/presets">
+    Use pre-configured sandbox settings
+  </Card>
+</CardGroup>

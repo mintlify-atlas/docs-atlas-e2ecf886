@@ -1,0 +1,281 @@
+---
+title: 'Configuration Overview'
+description: 'Learn how to configure Vectra Guard with config files, discovery, and the init command'
+---
+
+## Configuration Files
+
+Vectra Guard uses YAML configuration files to control its behavior. You can configure protection levels, sandbox settings, policies, and more.
+
+### File Locations
+
+Vectra Guard looks for configuration files in the following order (last one wins):
+
+<Steps>
+  <Step title="Global Config">
+    `~/.config/vectra-guard/config.yaml`
+    
+    Created by `vg init` - applies to all projects for the user
+  </Step>
+  
+  <Step title="Project Config">
+    `./vectra-guard.yaml`
+    
+    In your project root - share protection policies with your team
+  </Step>
+  
+  <Step title="Repo-Local Config">
+    `./.vectra-guard/config.yaml`
+    
+    Created by `vg init --local` - project-specific overrides
+  </Step>
+  
+  <Step title="Explicit Path">
+    Via `--config` flag
+    
+    ```bash
+    vectra-guard exec --config /path/to/config.yaml npm test
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+Commit `vectra-guard.yaml` to git to share security policies across your team!
+</Tip>
+
+## Configuration Discovery
+
+When you run a Vectra Guard command, it automatically discovers configuration files:
+
+1. Starts with built-in defaults
+2. Loads global config (`~/.config/vectra-guard/config.yaml`)
+3. Looks for project config (`./vectra-guard.yaml`)
+4. Applies repo-local overrides (`./.vectra-guard/config.yaml`)
+5. Applies environment variable overrides
+
+<CodeGroup>
+```bash Project Config (Recommended)
+# In your project root
+cat vectra-guard.yaml
+```
+
+```bash Global Config
+# User-wide settings
+cat ~/.config/vectra-guard/config.yaml
+```
+
+```bash Explicit Path
+# Use specific config file
+vg exec --config custom-config.yaml npm install
+```
+</CodeGroup>
+
+## Basic Configuration Structure
+
+A minimal configuration file contains these key sections:
+
+```yaml vectra-guard.yaml
+# Guard Level - Controls what requires approval
+guard_level:
+  level: auto  # auto, low, medium, high, paranoid
+  allow_user_bypass: true
+
+# Sandbox - Controls where commands run
+sandbox:
+  enabled: true
+  mode: always  # always, auto, risky, never
+  security_level: balanced  # permissive, balanced, strict, paranoid
+  enable_cache: true
+
+# CVE Awareness
+cve:
+  enabled: true
+  sources: ["osv"]
+  update_interval_hours: 24
+
+# Logging
+logging:
+  format: json  # json or text
+
+# Policies
+policies:
+  monitor_git_ops: true
+  detect_prod_env: true
+```
+
+<Note>
+Everything is optional - Vectra Guard uses smart defaults if you don't specify a value.
+</Note>
+
+## Using the Init Command
+
+The `vg init` command helps you create configuration files quickly.
+
+### Create Global Config
+
+```bash
+vg init
+```
+
+This creates `~/.config/vectra-guard/config.yaml` with recommended defaults.
+
+### Create Project Config
+
+```bash
+cd your-project
+vg init --local
+```
+
+This creates `./.vectra-guard/config.yaml` in your project directory.
+
+### Interactive Setup
+
+```bash
+vg init --interactive
+```
+
+Answers questions to customize your configuration:
+- What's your use case? (development/CI/production)
+- Do you want aggressive sandboxing?
+- Should CVE scanning be enabled?
+- What logging format do you prefer?
+
+### View Current Config
+
+```bash
+vg init --show-config
+```
+
+Displays the currently active configuration (after all merging and overrides).
+
+## Configuration Layers
+
+Vectra Guard uses a layered approach, where each layer can override the previous one:
+
+<Accordion title="Layer 1: Built-in Defaults">
+Vectra Guard ships with sensible defaults:
+- `guard_level: auto`
+- `sandbox.mode: always`
+- `sandbox.security_level: balanced`
+- `sandbox.enable_cache: true`
+- CVE scanning enabled
+</Accordion>
+
+<Accordion title="Layer 2: Global User Config">
+`~/.config/vectra-guard/config.yaml`
+
+Your personal preferences that apply to all projects.
+</Accordion>
+
+<Accordion title="Layer 3: Project Config">
+`./vectra-guard.yaml`
+
+Team-wide policies committed to version control.
+</Accordion>
+
+<Accordion title="Layer 4: Repo-Local Config">
+`./.vectra-guard/config.yaml`
+
+Project-specific overrides (not usually committed to git).
+</Accordion>
+
+<Accordion title="Layer 5: Environment Variables">
+```bash
+VECTRA_GUARD_LEVEL=paranoid vg exec "deploy script"
+```
+
+Runtime overrides for specific situations.
+</Accordion>
+
+## Environment Variable Overrides
+
+Override any configuration at runtime:
+
+<Tabs>
+  <Tab title="Guard Level">
+    ```bash
+    # Temporarily lower protection
+    VECTRA_GUARD_LEVEL=low vg exec "risky command"
+    
+    # Force paranoid mode
+    VECTRA_GUARD_LEVEL=paranoid vg exec "production deploy"
+    ```
+  </Tab>
+  
+  <Tab title="Bypass Protection">
+    ```bash
+    # Bypass if allowed in config
+    export VECTRAGUARD_BYPASS="i-am-human-$(whoami)"
+    vg exec "command"
+    ```
+    
+    <Warning>
+    Only works if `guard_level.allow_user_bypass: true` in config.
+    </Warning>
+  </Tab>
+  
+  <Tab title="Sandbox Mode">
+    ```bash
+    # Disable sandboxing temporarily
+    VECTRA_SANDBOX_MODE=never vg exec npm install
+    
+    # Force sandboxing
+    VECTRA_SANDBOX_MODE=always vg exec "trusted command"
+    ```
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Auto-Detection" icon="robot">
+    Set `guard_level: auto` and let Vectra Guard intelligently adjust protection based on context.
+  </Card>
+  
+  <Card title="Commit Project Config" icon="git">
+    Share security policies with your team by committing `vectra-guard.yaml` to version control.
+  </Card>
+  
+  <Card title="Layer Your Protection" icon="layer-group">
+    Use global config for personal preferences, project config for team policies, and env vars for situational overrides.
+  </Card>
+  
+  <Card title="Test Your Config" icon="flask">
+    Use `vg validate script.sh` to test how your configuration handles commands.
+  </Card>
+</CardGroup>
+
+## Validating Configuration
+
+Test your configuration before deploying:
+
+```bash
+# Validate config file syntax
+vg validate vectra-guard.yaml
+
+# Test how a command would be handled
+vg explain "npm install dangerous-package"
+
+# Dry run
+vg exec --dry-run "risky command"
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Presets" icon="copy" href="/configuration/presets">
+    Use pre-configured settings for common scenarios
+  </Card>
+  
+  <Card title="Sandbox Config" icon="box" href="/configuration/sandbox-config">
+    Configure sandboxing modes and security levels
+  </Card>
+  
+  <Card title="Guard Levels" icon="shield" href="/configuration/guard-levels">
+    Understand auto-detection and protection levels
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api-reference/config-schema">
+    Complete configuration schema reference
+  </Card>
+</CardGroup>
