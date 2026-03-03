@@ -1,0 +1,116 @@
+---
+title: "lockdown"
+description: "Control global lockdown mode for strict enforcement"
+---
+
+## Syntax
+
+```bash
+vg lockdown <enable|disable|status> [reason]
+```
+
+## Description
+
+The `lockdown` command enables a global enforcement mode that blocks all risky commands regardless of guard level configuration. This is useful for:
+
+- Emergency security incidents
+- Preventing any risky operations temporarily
+- Maintenance windows requiring restricted access
+- Compliance requirements
+
+When lockdown is enabled, only commands deemed completely safe (low risk) will execute. All medium, high, and critical risk commands are blocked.
+
+## Subcommands
+
+### enable
+
+Enable lockdown mode:
+
+```bash
+vg lockdown enable [reason]
+```
+
+<ParamField path="reason" type="string">
+  Optional reason for enabling lockdown (logged for audit)
+</ParamField>
+
+### disable
+
+Disable lockdown mode:
+
+```bash
+vg lockdown disable
+```
+
+### status
+
+Check current lockdown status:
+
+```bash
+vg lockdown status
+```
+
+## Examples
+
+### Enable Lockdown During Incident
+
+```bash
+# Enable with reason
+vg lockdown enable "Security incident response - unauthorized access detected"
+
+# Verify status
+vg lockdown status
+# Output: Lockdown ENABLED
+# Reason: Security incident response - unauthorized access detected
+# Enabled at: 2024-12-24T10:30:00Z
+```
+
+### Test Lockdown Behavior
+
+```bash
+# Enable lockdown
+vg lockdown enable "Testing lockdown mode"
+
+# Try a risky command
+vg exec -- npm install
+# Output: ❌ BLOCKED: Lockdown mode enabled
+
+# Disable lockdown
+vg lockdown disable
+```
+
+### Maintenance Window
+
+```bash
+# Enable during maintenance
+vg lockdown enable "Scheduled maintenance window"
+
+# Only safe commands work
+vg exec -- echo "Safe command"  # ✅ Allowed
+vg exec -- curl remote.com      # ❌ Blocked
+
+# Re-enable after maintenance
+vg lockdown disable
+```
+
+## Lockdown State
+
+Lockdown state is stored globally in:
+- `~/.vectra-guard/lockdown.state` (global)
+- `.vectra-guard/lockdown.state` (local)
+
+The state includes:
+- Enabled/disabled status
+- Timestamp when enabled
+- Reason for lockdown
+- User who enabled it
+
+## Exit Codes
+
+- **0**: Command completed successfully
+- **1**: Failed to update lockdown state
+
+## Related Commands
+
+- [exec](/cli/exec) - Execute commands (respects lockdown)
+- [validate](/cli/validate) - Validate scripts

@@ -1,0 +1,186 @@
+---
+title: "validate-agent"
+description: "Validate agent scripts and directories"
+---
+
+## Syntax
+
+```bash
+vg validate-agent <path>
+```
+
+## Description
+
+The `validate-agent` command validates shell scripts or entire directories used by AI coding agents. It performs comprehensive security analysis tailored for agent-generated code, including:
+
+- Script security validation
+- Agent instruction files (`.cursorrules`, `.clinerules`, etc.)
+- Common agent patterns and idioms
+- Batch validation of multiple scripts
+
+This is useful for:
+- Validating agent-generated scripts before execution
+- Auditing agent instruction files
+- Ensuring agent workflows are secure
+- CI/CD validation of agent outputs
+
+## Arguments
+
+<ParamField path="path" type="string" required>
+  Path to a shell script or directory to validate. If a directory is provided, all scripts within will be validated.
+</ParamField>
+
+## Examples
+
+### Validate Agent Script
+
+```bash
+vg validate-agent agent-generated-script.sh
+```
+
+**Example output:**
+```
+✅ PASS: agent-generated-script.sh
+   No security issues detected
+
+Summary:
+- Total scripts: 1
+- Passed: 1
+- Failed: 0
+```
+
+### Validate Agent Directory
+
+```bash
+# Validate all scripts in a directory
+vg validate-agent scripts/agent-output/
+```
+
+**Example output:**
+```
+Validating scripts in: scripts/agent-output/
+
+✅ PASS: setup.sh
+⚠️  WARN: deploy.sh
+   - Medium risk: sudo usage detected
+   - Line 15: sudo systemctl restart nginx
+
+❌ FAIL: cleanup.sh
+   - High risk: rm -rf with variable expansion
+   - Line 8: rm -rf $TEMP_DIR/*
+
+Summary:
+- Total scripts: 3
+- Passed: 1
+- Warnings: 1
+- Failed: 1
+```
+
+### Validate Agent Instructions
+
+```bash
+# Check agent rule files
+vg validate-agent .cursorrules
+vg validate-agent .clinerules
+```
+
+### CI/CD Integration
+
+```bash
+# Validate all agent-generated scripts in CI
+vg validate-agent ci/agent-scripts/ || {
+  echo "Agent script validation failed"
+  exit 1
+}
+```
+
+## Validation Checks
+
+The command performs:
+
+1. **Shell Script Analysis**
+   - Syntax validation
+   - Security pattern detection
+   - Risk level assessment
+
+2. **Agent-Specific Checks**
+   - Agent instruction file syntax
+   - Common agent antipatterns
+   - Agent-generated code patterns
+
+3. **Directory Traversal**
+   - Recursive script discovery
+   - Batch validation
+   - Aggregate reporting
+
+## Exit Codes
+
+- **0**: All scripts passed validation
+- **1**: One or more scripts failed validation
+- **2**: Validation error (file not found, parse error)
+
+## Supported Agent Files
+
+- `.cursorrules` - Cursor IDE rules
+- `.clinerules` - CLI agent rules
+- `.aiderules` - Aider agent rules
+- `.windsurfrules` - Windsurf agent rules
+- Any `.sh`, `.bash`, `.zsh` scripts
+
+## Use Cases
+
+### Pre-Execution Validation
+
+```bash
+# Agent generates script
+agent_output="generated-deploy.sh"
+
+# Validate before running
+vg validate-agent "$agent_output"
+if [ $? -eq 0 ]; then
+  # Safe to execute
+  vg exec -- bash "$agent_output"
+else
+  echo "Agent script validation failed - manual review required"
+fi
+```
+
+### Batch Agent Output Validation
+
+```bash
+# Validate all scripts generated in a session
+SESSION_DIR=".agent-session-$(date +%s)"
+
+# After agent completes
+vg validate-agent "$SESSION_DIR"
+```
+
+### IDE Integration
+
+```bash
+# Add to IDE task
+{
+  "label": "Validate Agent Scripts",
+  "type": "shell",
+  "command": "vg validate-agent scripts/",
+  "problemMatcher": []
+}
+```
+
+## Agent-Specific Patterns
+
+The validator recognizes common agent patterns:
+
+- Script generation templates
+- Agent command wrappers
+- Temporary file management
+- Agent-specific error handling
+
+It applies appropriate risk assessment based on these patterns.
+
+## Related Commands
+
+- [validate](/cli/validate) - Validate individual scripts
+- [exec](/cli/exec) - Execute validated scripts
+- [prompt-firewall](/cli/prompt-firewall) - Check agent prompts for injection
+- [scan-security](/cli/scan-security) - Deep security scan

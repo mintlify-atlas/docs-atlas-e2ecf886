@@ -85,6 +85,7 @@
             "pages": [
               "cli/exec",
               "cli/validate",
+              "cli/explain",
               "cli/session",
               "cli/audit",
               "cli/cve",
@@ -94,7 +95,12 @@
               "cli/context",
               "cli/roadmap",
               "cli/metrics",
-              "cli/init"
+              "cli/init",
+              "cli/seed",
+              "cli/lockdown",
+              "cli/prompt-firewall",
+              "cli/validate-agent",
+              "cli/serve"
             ]
           }
         ]

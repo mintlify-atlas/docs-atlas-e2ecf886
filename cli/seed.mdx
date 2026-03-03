@@ -1,0 +1,230 @@
+---
+title: "seed"
+description: "Seed agent instructions and configurations"
+---
+
+## Syntax
+
+```bash
+vg seed agents [options]
+```
+
+## Description
+
+The `seed agents` command installs agent instruction files and workflow templates into your repository. This sets up AI coding agents (like Cursor, Claude, Copilot) with Vectra Guard integration and best practices.
+
+Seeded files include:
+- Agent instruction files (`.cursorrules`, `.clinerules`, etc.)
+- Workflow examples
+- Security guidelines
+- Integration templates
+
+## Options
+
+<ParamField path="--target" type="string" default=".">
+  Target repository directory where files will be seeded
+</ParamField>
+
+<ParamField path="--targets" type="string">
+  Comma or space-separated list of targets to seed (e.g., "agents,claude,cursor,openclaw")
+</ParamField>
+
+<ParamField path="--force" type="boolean" default="false">
+  Overwrite existing files without prompting
+</ParamField>
+
+<ParamField path="--list" type="boolean" default="false">
+  List available seed targets and exit
+</ParamField>
+
+<ParamField path="--yes" type="boolean" default="false">
+  Auto-confirm all prompts (non-interactive mode)
+</ParamField>
+
+## Available Targets
+
+### List All Targets
+
+```bash
+vg seed agents --list
+```
+
+**Available targets:**
+- `agents` - Generic agent instructions (AGENTS.md)
+- `cursor` - Cursor IDE rules (.cursorrules)
+- `claude` - Claude Desktop rules (.clinerules)
+- `copilot` - GitHub Copilot instructions
+- `openclaw` - OpenClaw plugin configuration
+- `windsurf` - Windsurf IDE rules
+- `codex` - OpenAI Codex configuration
+
+## Examples
+
+### Seed All Agent Files
+
+```bash
+# Interactive mode - prompts for confirmation
+vg seed agents --target .
+```
+
+### Seed Specific Targets
+
+```bash
+# Seed Cursor and Claude configurations
+vg seed agents --targets "cursor,claude"
+
+# Seed OpenClaw plugin
+vg seed agents --targets "openclaw"
+
+# Seed everything
+vg seed agents --targets "agents,cursor,claude,copilot,openclaw"
+```
+
+### Non-Interactive Mode
+
+```bash
+# Auto-confirm for CI/CD
+vg seed agents --targets "agents,cursor" --yes
+
+# Force overwrite existing files
+vg seed agents --targets "cursor" --force --yes
+```
+
+### Seed to Specific Directory
+
+```bash
+# Seed to a different directory
+vg seed agents --target /path/to/project --targets "agents"
+```
+
+## Seeded Files
+
+### For Cursor
+
+Creates `.cursorrules` with:
+- Vectra Guard integration instructions
+- Security best practices
+- Command usage examples
+- Workflow guidelines
+
+### For Claude
+
+Creates `.clinerules` with similar content tailored for Claude Desktop.
+
+### For OpenClaw
+
+Creates `.openclaw/vectraguard-plugin.json` with:
+- Plugin configuration
+- Command gate setup
+- CVE scanning integration
+- Audit trail configuration
+
+### Generic Agent Instructions
+
+Creates `AGENTS.md` with:
+- Vectra Guard usage guide
+- Security workflow examples
+- Command reference
+- Integration patterns
+
+## Example Output
+
+```bash
+vg seed agents --targets "agents,cursor,openclaw"
+
+============================================================
+🌱 Vectra Guard Agent Seeding
+============================================================
+
+Target directory: /home/user/project
+Selected targets: agents, cursor, openclaw
+
+📝 Seeding agents (AGENTS.md)...
+   ✅ Created AGENTS.md
+
+📝 Seeding cursor (.cursorrules)...
+   ✅ Created .cursorrules
+
+📝 Seeding openclaw (.openclaw/vectraguard-plugin.json)...
+   ✅ Created .openclaw/vectraguard-plugin.json
+
+============================================================
+✅ Seeding complete! 3 targets processed.
+
+Next steps:
+1. Review the seeded files
+2. Restart your IDE/agent to load new configurations
+3. Run: vg init --local (if not already done)
+```
+
+## Use Cases
+
+### New Project Setup
+
+```bash
+# Initialize a new project with agent support
+git clone https://github.com/user/project.git
+cd project
+
+# Install Vectra Guard configs
+vg init --local
+vg seed agents --targets "agents,cursor,openclaw" --yes
+```
+
+### Team Onboarding
+
+```bash
+# Seed standard agent configurations for team
+vg seed agents --targets "cursor,claude,copilot" --force --yes
+
+# Commit to repository
+git add .cursorrules .clinerules .github/copilot-instructions.md
+git commit -m "Add Vectra Guard agent configurations"
+```
+
+### OpenClaw Plugin Setup
+
+```bash
+# Set up OpenClaw with Vectra Guard
+vg seed agents --targets "openclaw" --yes
+
+# Verify plugin config
+cat .openclaw/vectraguard-plugin.json
+```
+
+## Seeded Content Example
+
+Example `.cursorrules` content:
+
+```markdown
+# Vectra Guard Integration
+
+When executing shell commands, always use Vectra Guard:
+
+## Installation Check
+- Verify vg is available: `which vg`
+- If not installed, prompt user to install Vectra Guard
+
+## Command Execution
+- Use: `vg exec -- <command>`
+- For scripts: `vg validate <script>` before running
+- Start session: `SESSION=$(vg session start --agent "cursor-ai")`
+
+## Security Checks
+- CVE scan before installing: `vg cve scan --path .`
+- Validate scripts: `vg validate deploy.sh`
+- Check for secrets: `vg scan-secrets --path .`
+
+[Additional instructions...]
+```
+
+## Exit Codes
+
+- **0**: Seeding completed successfully
+- **1**: Seeding failed (permission error, invalid target)
+- **2**: User cancelled operation
+
+## Related Commands
+
+- [init](/cli/init) - Initialize Vectra Guard configuration
+- [validate-agent](/cli/validate-agent) - Validate agent scripts

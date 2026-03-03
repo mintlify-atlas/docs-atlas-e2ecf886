@@ -1,0 +1,196 @@
+---
+title: "serve"
+description: "Launch local web dashboard"
+---
+
+## Syntax
+
+```bash
+vg serve [--port <number>]
+```
+
+## Description
+
+The `serve` command launches a local web dashboard for Vectra Guard, providing a visual interface to:
+
+- View session history and activity
+- Browse audit logs
+- Monitor metrics and statistics
+- Inspect command executions
+- Review CVE scan results
+- Manage trust store entries
+
+The dashboard runs locally and does not send data externally.
+
+## Options
+
+<ParamField path="--port" type="number" default="8000">
+  Port number to bind the web server to
+</ParamField>
+
+## Examples
+
+### Start Dashboard (Default Port)
+
+```bash
+vg serve
+```
+
+**Output:**
+```
+🚀 Vectra Guard Dashboard starting...
+
+Local: http://127.0.0.1:8000
+
+Press Ctrl+C to stop
+```
+
+### Use Custom Port
+
+```bash
+# Use port 3000
+vg serve --port 3000
+
+# Dashboard available at http://127.0.0.1:3000
+```
+
+### Background Mode
+
+```bash
+# Run in background
+vg serve &
+
+# Save PID
+echo $! > .vg-serve.pid
+
+# Later, stop the server
+kill $(cat .vg-serve.pid)
+```
+
+## Dashboard Features
+
+### Sessions View
+
+View all tracked sessions:
+- Session ID and agent name
+- Start/end timestamps
+- Command count
+- Status (active/completed)
+
+### Audit Logs
+
+Browse command executions:
+- Command text
+- Exit codes
+- Duration
+- Risk level
+- Findings
+
+### Metrics Dashboard
+
+Visual metrics display:
+- Sandbox vs host execution ratio
+- Cache hit rates
+- Time saved
+- Risk level distribution
+
+### Trust Store Management
+
+Manage trusted commands:
+- View trusted commands
+- See usage counts
+- Check expiration dates
+- Remove trusted entries
+
+### CVE Reports
+
+View vulnerability scan results:
+- Detected CVEs
+- Affected packages
+- Severity levels
+- Recommendations
+
+## Security Notes
+
+<Warning>
+The dashboard is bound to `127.0.0.1` (localhost only) by default and does not accept external connections. Do not expose it to untrusted networks.
+</Warning>
+
+<Info>
+All data displayed in the dashboard comes from local storage:
+- `~/.vectra-guard/sessions/`
+- `~/.vectra-guard/audit/`
+- `~/.vectra-guard/trust/`
+- `~/.vectra-guard/cve-cache/`
+</Info>
+
+## Use Cases
+
+### Interactive Review
+
+```bash
+# Start dashboard for interactive session review
+vg serve
+
+# Open in browser
+open http://127.0.0.1:8000
+```
+
+### Team Demo
+
+```bash
+# Show team the security activity
+vg serve --port 8080
+
+# Share: "View the dashboard at http://127.0.0.1:8080"
+```
+
+### Development Workflow
+
+```bash
+# Terminal 1: Run your workflow
+SESSION=$(vg session start --agent "dev")
+export VECTRAGUARD_SESSION_ID=$SESSION
+vg exec -- npm install
+vg exec -- npm test
+
+# Terminal 2: Watch activity in dashboard
+vg serve
+```
+
+## Dashboard Routes
+
+The dashboard provides these routes:
+
+- `/` - Overview and summary
+- `/sessions` - Session list and details
+- `/audit` - Audit log browser
+- `/metrics` - Metrics and charts
+- `/trust` - Trust store management
+- `/cve` - CVE scan results
+- `/config` - Configuration viewer
+
+## Technical Details
+
+The dashboard is a lightweight HTTP server that:
+- Serves static HTML/CSS/JS
+- Reads from local Vectra Guard data stores
+- Provides a REST API for data access
+- Does not require external dependencies
+- Auto-refreshes data
+
+## Stopping the Server
+
+Press `Ctrl+C` in the terminal running `vg serve`.
+
+## Exit Codes
+
+- **0**: Server stopped gracefully
+- **1**: Server failed to start (port in use, permission error)
+
+## Related Commands
+
+- [session](/cli/session) - Manage sessions from CLI
+- [audit](/cli/audit) - Generate audit reports
+- [metrics](/cli/metrics) - View metrics from CLI
+- [trust](/cli/trust) - Manage trust store from CLI
